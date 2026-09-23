@@ -5,15 +5,14 @@
 
 ---
 
-## Open Questions (resolve before Phase 1)
+## Resolved Decisions
 
-> [!IMPORTANT]
-> The following need a decision before implementation starts:
->
-> 1. **Binary name**: `tfm`? `nav`? `fim`? Something else? (affects the binary, config dir, desktop entry)
-> 2. **GitHub repo name**: `tui-file-manager` (already the local dir name) or a different slug?
-> 3. **chafa for image preview**: It is in `extra` (AUR-free). Should `install.sh` pull it in automatically via `pacman -S --noconfirm chafa`, or list it as an optional dependency users install themselves?
-> 4. **Work dir path**: The sidebar "Work" bookmark is resolved from `$HOME/Work` at runtime, no hardcoding. Confirm this is the right default, or make it configurable in `config.toml`.
+| # | Question | Decision |
+|---|---|---|
+| 1 | Binary name | `fim` |
+| 2 | GitHub repo name | `tui-file-manager` (confirmed) |
+| 3 | chafa install | `install.sh` pulls it automatically via `pacman -S --noconfirm chafa` |
+| 4 | Work sidebar path | `$HOME/Work`, auto-detected at runtime, hidden from sidebar if the dir does not exist |
 
 ---
 
@@ -152,6 +151,7 @@ Resolved at runtime, never hardcoded:
 |---|---|
 | Home | `$HOME` |
 | Documents | `$XDG_DOCUMENTS_DIR` (from `~/.config/user-dirs.dirs`), fallback `$HOME/Documents` |
+| Downloads | `$XDG_DOWNLOAD_DIR` (from `~/.config/user-dirs.dirs`), fallback `$HOME/Downloads` |
 | Pictures | `$XDG_PICTURES_DIR`, fallback `$HOME/Pictures` |
 | Videos | `$XDG_VIDEOS_DIR`, fallback `$HOME/Videos` |
 | Work | Config `[bookmarks]` `work_dir`, fallback `$HOME/Work` if it exists, else hidden |

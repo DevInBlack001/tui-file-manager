@@ -1,0 +1,28 @@
+[package]
+name = "fim"
+version = "0.1.0"
+edition = "2021"
+authors = ["DevInBlack001"]
+license = "MIT"
+description = "Keyboard-driven TUI file manager for Arch/Omarchy. Transfers via filetransferd. Aether theme integration."
+repository = "https://github.com/DevInBlack001/tui-file-manager"
+
+[[bin]]
+name = "fim"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.28"
+crossterm = { version = "0.28", features = ["event-stream"] }
+toml = { version = "0.8", features = ["parse"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+mime_guess = "2"
+dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+strip = true
+opt-level = 3
