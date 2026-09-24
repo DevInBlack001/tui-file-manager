@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
+use crate::theme::Theme;
 use crate::app::App;
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
@@ -21,28 +22,23 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
     let mut idx = 1u8;
 
+    lines.push(section_header("PLACES", inner.width, theme));
     for bm in &app.bookmarks.sections {
         let is_current = if bm.is_recents {
             app.viewing_recents
         } else {
             !app.viewing_recents && app.cwd == bm.path
         };
-        lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, theme));
+        lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme));
         idx += 1;
     }
 
     if !app.bookmarks.custom.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "\u{2500}".repeat(inner.width.max(1) as usize),
-            Style::default().fg(theme.muted),
-        )));
-        lines.push(Line::from(Span::styled(
-            "Bookmarks",
-            Style::default().fg(theme.muted),
-        )));
+        lines.push(Line::from(""));
+        lines.push(section_header("BOOKMARKS", inner.width, theme));
         for bm in &app.bookmarks.custom {
             let is_current = !app.viewing_recents && app.cwd == bm.path;
-            lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, theme));
+            lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme));
             idx += 1;
         }
     }
@@ -50,26 +46,56 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(lines), inner);
 }
 
-fn bookmark_line<'a>(name: &'a str, exists: bool, is_current: bool, idx: u8, theme: &crate::theme::Theme) -> Line<'a> {
-    let label = if idx <= 9 {
-        format!("{idx} {name}")
-    } else {
-        format!("  {name}")
+fn section_header(title: &str, width: u16, theme: &Theme) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!(" {title} "),
+            Style::default().fg(theme.bg).bg(theme.muted).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "\u{2500}".repeat((width as usize).saturating_sub(title.len() + 2)),
+            Style::default().fg(theme.muted),
+        ),
+    ])
+}
+
+fn bookmark_line<'a>(name: &'a str, exists: bool, is_current: bool, idx: u8, width: u16, theme: &Theme) -> Line<'a> {
+    let number = if idx <= 9 { idx.to_string() } else { " ".to_string() };
+    let marker = if is_current { "\u{25b8}" } else { " " };
+
+    let row_bg = if is_current { Some(theme.selection_bg) } else { None };
+    let with_bg = |mut s: Style| {
+        if let Some(bg) = row_bg {
+            s = s.bg(bg);
+        }
+        s
     };
 
-    let mut style = if !exists {
-        Style::default().fg(theme.muted)
+    let (name_style, number_style) = if !exists {
+        (
+            with_bg(Style::default().fg(theme.muted).add_modifier(Modifier::DIM)),
+            with_bg(Style::default().fg(theme.muted).add_modifier(Modifier::DIM)),
+        )
     } else if is_current {
-        Style::default()
-            .fg(theme.fg_bright)
-            .bg(theme.selection_bg)
-            .add_modifier(Modifier::BOLD)
+        (
+            with_bg(Style::default().fg(theme.fg_bright).add_modifier(Modifier::BOLD)),
+            with_bg(Style::default().fg(theme.accent)),
+        )
     } else {
-        Style::default().fg(theme.fg)
+        (Style::default().fg(theme.fg), Style::default().fg(theme.muted))
     };
-    if !exists {
-        style = style.add_modifier(Modifier::DIM);
-    }
+    let marker_style = with_bg(Style::default().fg(if is_current { theme.accent } else { theme.bg }));
 
-    Line::from(Span::styled(label, style))
+    let content_len = 4 + name.chars().count(); // "M N " + name
+    let pad = " ".repeat((width as usize).saturating_sub(content_len));
+
+    let mut spans = vec![
+        Span::styled(format!("{marker} "), marker_style),
+        Span::styled(format!("{number} "), number_style),
+        Span::styled(name, name_style),
+    ];
+    if is_current && !pad.is_empty() {
+        spans.push(Span::styled(pad, with_bg(Style::default())));
+    }
+    Line::from(spans)
 }

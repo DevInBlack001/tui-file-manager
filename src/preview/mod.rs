@@ -38,6 +38,12 @@ pub enum PreviewContent {
     ChafaLines(Vec<String>),
     /// Hex dump lines.
     HexDump(Vec<String>),
+    /// Raw terminal graphics protocol payload (currently: chafa's `--format
+    /// kitty` output) for a real raster image, to be written directly to the
+    /// terminal, bypassing ratatui's cell buffer entirely. Only produced
+    /// when the terminal was detected (via environment variables only - see
+    /// `image::detect_graphics_format`, never a live query) to support it.
+    KittyImage(Vec<u8>),
     /// A hand-drawn, theme-coloured ASCII glyph (e.g. disc icon for .iso,
     /// archive icon for .zip) shown instead of a hex dump for well-known
     /// binary container formats.
@@ -80,8 +86,9 @@ impl Previewer {
 
         thread::spawn(move || {
             let truecolor = image::detect_truecolor();
+            let graphics = image::detect_graphics_format();
             while let Ok(req) = req_rx.recv() {
-                let content = render_preview(&req, truecolor);
+                let content = render_preview(&req, truecolor, graphics);
                 let _ = res_tx.send((req.path, content));
             }
         });
@@ -134,7 +141,19 @@ const ARCHIVE_EXTENSIONS: &[&str] = &[
 ];
 const TORRENT_EXTENSIONS: &[&str] = &["torrent"];
 
-fn render_preview(req: &PreviewRequest, truecolor: bool) -> PreviewContent {
+// OpenDocument and Microsoft Office document formats. These are zip
+// containers under the hood, but showing them as a generic "ARCHIVE" glyph
+// (or a hex dump, since mime_guess doesn't always resolve them to something
+// preview-friendly) is misleading - they're documents, not archives a user
+// would want to unpack.
+const DOCUMENT_EXTENSIONS: &[&str] = &[
+    // OpenDocument family (.ods and its siblings/alternatives)
+    "ods", "ots", "odt", "ott", "odp", "otp", "odg", "otg", "odf", "odc",
+    // Microsoft Office family
+    "xlsx", "xlsm", "xls", "docx", "docm", "doc", "pptx", "pptm", "ppt",
+];
+
+fn render_preview(req: &PreviewRequest, truecolor: bool, graphics: Option<&str>) -> PreviewContent {
     let path = &req.path;
     if req.is_dir {
         return directory::render(path);
@@ -145,6 +164,9 @@ fn render_preview(req: &PreviewRequest, truecolor: bool) -> PreviewContent {
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
+    if DOCUMENT_EXTENSIONS.contains(&ext.as_str()) {
+        return PreviewContent::Glyph(glyph::document());
+    }
     if DISC_EXTENSIONS.contains(&ext.as_str()) {
         return PreviewContent::Glyph(glyph::disc());
     }
@@ -159,9 +181,9 @@ fn render_preview(req: &PreviewRequest, truecolor: bool) -> PreviewContent {
     if crate::fs::mime::is_text(&mime) {
         text::render(path, req.max_text_lines)
     } else if crate::fs::mime::is_image(&mime) {
-        image::render(path, req.width, req.height, truecolor)
+        image::render(path, req.width, req.height, truecolor, graphics)
     } else if crate::fs::mime::is_video(&mime) && req.video_thumbs {
-        video::render(path, req.width, req.height, truecolor)
+        video::render(path, req.width, req.height, truecolor, graphics)
     } else if crate::fs::mime::is_pdf(&mime) {
         pdf::render(path, req.max_text_lines)
     } else {

@@ -18,6 +18,7 @@ pub fn render(
     width: u16,
     height: u16,
     truecolor: bool,
+    graphics: Option<&str>,
 ) -> crate::preview::PreviewContent {
     // TOCTOU guard.
     if path.is_symlink() {
@@ -88,7 +89,7 @@ pub fn render(
 
     // The thumb file is a real file, not a symlink we created; safe to pass
     // to image::render which does its own symlink check.
-    crate::preview::image::render(&thumb_path, width, height, truecolor)
+    crate::preview::image::render(&thumb_path, width, height, truecolor, graphics)
 }
 
 /// Spawn ffmpegthumbnailer and wait up to FFTHUMB_TIMEOUT_SECS.

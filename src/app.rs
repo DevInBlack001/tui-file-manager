@@ -208,6 +208,17 @@ impl App {
         self.visible_entries().into_iter().nth(self.cursor)
     }
 
+    /// The raw terminal-graphics payload to blit directly to the terminal
+    /// for the currently focused entry, and the path it belongs to (so the
+    /// caller can tell a genuinely new image apart from the same one still
+    /// showing). `None` when the current preview isn't a graphics image.
+    pub fn preview_graphics(&self) -> Option<(&std::path::Path, &[u8])> {
+        match (&self.preview_content, &self.preview_path) {
+            (PreviewContent::KittyImage(bytes), Some(path)) => Some((path.as_path(), bytes.as_slice())),
+            _ => None,
+        }
+    }
+
     pub fn flattened_bookmarks(&self) -> Vec<&Bookmark> {
         self.bookmarks
             .sections

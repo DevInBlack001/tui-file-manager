@@ -1,22 +1,25 @@
 // src/preview/image.rs
-// Image preview via chafa(1). Renders into ANSI/UTF-8 block art for the TUI.
+// Image preview via chafa(1): either real terminal graphics (Kitty graphics
+// protocol) when the terminal is known to support it, or character-art
+// otherwise.
 
 const CHAFA_PATH: &str = "/usr/bin/chafa";
 /// Maximum bytes read from chafa's stdout.
-const MAX_CHAFA_OUTPUT_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB
+const MAX_CHAFA_OUTPUT_BYTES: u64 = 16 * 1024 * 1024; // 16 MiB (raster payloads are larger than character art)
 /// Subprocess timeout in seconds.
 const CHAFA_TIMEOUT_SECS: u64 = 10;
 
 /// Render an image using chafa.
 ///
 /// `width` and `height` are the terminal character dimensions of the panel.
-/// Returns `ChafaLines` on success, `Unavailable` if chafa is not installed
-/// or the call fails.
+/// `graphics`, from `detect_graphics_format`, selects real terminal graphics
+/// over character art when the terminal is known to support it.
 pub fn render(
     path: &std::path::Path,
     width: u16,
     height: u16,
     truecolor: bool,
+    graphics: Option<&str>,
 ) -> crate::preview::PreviewContent {
     // TOCTOU guard.
     if path.is_symlink() {
@@ -41,48 +44,63 @@ pub fn render(
     };
 
     let size_arg = format!("{}x{}", width, height);
-    let colors_arg = if truecolor { "full" } else { "256" };
 
-    match run_chafa(path_str, &size_arg, colors_arg) {
-        Ok(lines) => crate::preview::PreviewContent::ChafaLines(lines),
+    if let Some(format) = graphics {
+        return match run_chafa_bytes(&[
+            "--format", format,
+            "--probe", "off",
+            "--relative", "off",
+            "--size", &size_arg,
+            "--",
+            path_str,
+        ]) {
+            Ok(bytes) => crate::preview::PreviewContent::KittyImage(bytes),
+            Err(msg) => crate::preview::PreviewContent::Unavailable(msg),
+        };
+    }
+
+    let colors_arg = if truecolor { "full" } else { "256" };
+    match run_chafa_bytes(&[
+        // Force character-art output. chafa's format auto-detection can
+        // pick sixels/kitty and emit raw DCS graphics escape sequences,
+        // which render as garbage text once captured as a string.
+        "--format", "symbols",
+        // chafa defaults to probing the terminal (querying it and waiting
+        // up to 5s for a response, e.g. an OSC 10/11 colour query) to
+        // refine its auto-detection. It inherits our stdin, which is the
+        // real controlling terminal, so that query and its response race
+        // directly against our own key-event reader - confirmed to leak
+        // raw `rgb:RRRR/GGGG/BBBB` response bytes into whatever text
+        // prompt happened to be focused. Disabled: we already pin
+        // --format/--colors explicitly, so nothing chafa could learn from
+        // probing changes its output here.
+        "--probe", "off",
+        // Fill the full requested box rather than only however much a
+        // strict aspect-preserving fit would use - character art has so
+        // little vertical resolution per row that aspect-correct sizing
+        // often leaves most of a tall preview pane blank.
+        "--stretch",
+        "--size", &size_arg,
+        "--colors", colors_arg,
+        "--",
+        path_str,
+    ]) {
+        Ok(bytes) => {
+            let text = String::from_utf8_lossy(&bytes);
+            let lines: Vec<String> = text.split('\n').map(|l| l.to_owned()).collect();
+            crate::preview::PreviewContent::ChafaLines(lines)
+        }
         Err(msg) => crate::preview::PreviewContent::Unavailable(msg),
     }
 }
 
-/// Spawn chafa with a 10-second timeout and return its output lines.
-fn run_chafa(
-    path_str: &str,
-    size_arg: &str,
-    colors_arg: &str,
-) -> Result<Vec<String>, String> {
+/// Spawn chafa with a timeout and return its raw stdout bytes (bounded).
+fn run_chafa_bytes(args: &[&str]) -> Result<Vec<u8>, String> {
     use std::io::Read;
     use std::time::{Duration, Instant};
 
     let mut child = std::process::Command::new(CHAFA_PATH)
-        .args([
-            // Force character-art output. chafa's format auto-detection can
-            // pick sixels/kitty and emit raw DCS graphics escape sequences,
-            // which render as garbage text once captured as a string.
-            "--format",
-            "symbols",
-            // chafa defaults to probing the terminal (querying it and
-            // waiting up to 5s for a response, e.g. an OSC 10/11 colour
-            // query) to refine its auto-detection. It inherits our stdin,
-            // which is the real controlling terminal, so that query and its
-            // response race directly against our own key-event reader -
-            // confirmed to leak raw `rgb:RRRR/GGGG/BBBB` response bytes into
-            // whatever text prompt happened to be focused. Disabled: we
-            // already pin --format/--colors explicitly, so nothing chafa
-            // could learn from probing changes its output here.
-            "--probe",
-            "off",
-            "--size",
-            size_arg,
-            "--colors",
-            colors_arg,
-            "--",
-            path_str,
-        ])
+        .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -110,10 +128,7 @@ fn run_chafa(
     }
 
     read_result.map_err(|e| format!("chafa: read error: {}", e))?;
-
-    let text = String::from_utf8_lossy(&buf);
-    let lines: Vec<String> = text.split('\n').map(|l| l.to_owned()).collect();
-    Ok(lines)
+    Ok(buf)
 }
 
 /// Poll a child process for up to `timeout`, returning true if it exited.
@@ -143,5 +158,33 @@ pub fn detect_truecolor() -> bool {
             v == "truecolor" || v == "24bit"
         }
         Err(_) => false,
+    }
+}
+
+/// Detect a real terminal graphics protocol chafa can target, from
+/// environment variables set by the terminal emulator itself - never a live
+/// query, which would reopen the probe/race class of bug fixed in `render`
+/// (querying the terminal and reading its response is exactly what raced our
+/// own key-event reader and leaked garbage into text prompts).
+///
+/// Returns a value for chafa's `--format` flag, or `None` to fall back to
+/// character art. Kitty, Ghostty, and WezTerm all implement the Kitty
+/// graphics protocol and identify themselves via environment variables at
+/// startup, so this is reliable without ever touching the terminal.
+pub fn detect_graphics_format() -> Option<&'static str> {
+    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
+        return Some("kitty");
+    }
+    if std::env::var_os("GHOSTTY_RESOURCES_DIR").is_some() {
+        return Some("kitty");
+    }
+    if std::env::var_os("WEZTERM_EXECUTABLE").is_some() {
+        return Some("kitty");
+    }
+    match std::env::var("TERM_PROGRAM") {
+        Ok(v) if v.eq_ignore_ascii_case("ghostty") || v.eq_ignore_ascii_case("wezterm") => {
+            Some("kitty")
+        }
+        _ => None,
     }
 }

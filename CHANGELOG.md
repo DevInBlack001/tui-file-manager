@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Real terminal graphics for image/video previews (the Kitty graphics protocol) when the terminal is known to support it (Kitty, Ghostty, WezTerm - detected only via environment variables the terminal sets at startup, never a live query), instead of always falling back to character-art. Character art (chafa `--format symbols`) remains the fallback for every other terminal, now with `--stretch` so it fills the full preview pane instead of only however much a strict aspect-preserving fit would use.
+- A "DOCUMENT" glyph for OpenDocument (`.ods` and its `.odt`/`.odp`/`.odg` siblings) and Microsoft Office (`.xlsx`/`.docx`/`.pptx` and their legacy `.xls`/`.doc`/`.ppt` equivalents) formats, instead of showing them as a generic archive or a hex dump.
+- Glyphs (disc/archive/torrent/document) are now centered and scaled up to actually use a tall preview pane, instead of sitting pinned in the top-left corner.
+- Restyled the help overlay (`?`) into two columns of named sections (Navigation, View, Open, Selection & Clipboard, File Operations, General) instead of one long undifferentiated list.
+- Restyled the sidebar with a "PLACES"/"BOOKMARKS" section header, a full-row highlight and a `▸` marker for the current location, and a dimmed number column separate from the bookmark name.
+
 - Full TUI event loop and app state machine (`src/app.rs`), wiring up the previously-implemented backend (config, core, fs, preview, theme) to a working ratatui interface.
 - Sidebar, file list, preview + stats, status bar, and inline prompt widgets (`src/ui/`).
 - Help overlay (`?`).

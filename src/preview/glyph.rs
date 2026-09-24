@@ -1,6 +1,6 @@
 // preview/glyph.rs - Hand-drawn ASCII glyphs for well-known binary container
-// formats (disc images, archives, torrents), shown instead of a generic hex
-// dump.
+// formats (disc images, archives, torrents, office documents), shown instead
+// of a generic hex dump.
 //
 // Style matches this machine's Omarchy screensaver branding
 // (~/.config/omarchy/branding/screensaver.txt): thin-line block letters
@@ -41,6 +41,21 @@ pub fn archive() -> Vec<GlyphLine> {
         line(&[("/____| ", Yellow), ("|___|", Accent), ("|_|    ", Cyan)]),
         line(&[("", Fg)]),
         line(&[("         ARCHIVE", Muted)]),
+    ]
+}
+
+/// Block-letter "DOC", for OpenDocument/Microsoft Office document formats
+/// (`.ods`/`.odt`/`.odp` and their `.xlsx`/`.docx`/`.pptx` equivalents).
+pub fn document() -> Vec<GlyphLine> {
+    use GlyphColor::*;
+    vec![
+        line(&[(" ____   ", Accent), ("___  ", Fg), ("____ ", Cyan)]),
+        line(&[("|  _ \\ ", Accent), ("/ _ \\ ", Fg), ("/ ___|", Cyan)]),
+        line(&[("| | | |", Accent), ("| | | | ", Fg), ("|    ", Cyan)]),
+        line(&[("| |_| | ", Accent), ("|_| | ", Fg), ("|___ ", Cyan)]),
+        line(&[("|____/  ", Accent), ("\\___/  ", Fg), ("\\____|", Cyan)]),
+        line(&[("", Fg)]),
+        line(&[("        DOCUMENT", Muted)]),
     ]
 }
 

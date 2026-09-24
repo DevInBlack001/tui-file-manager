@@ -10,39 +10,73 @@ pub mod sidebar;
 pub mod statusbar;
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 use crate::app::{App, Mode};
+use crate::theme::Theme;
 
-const HELP_TEXT: &[(&str, &str)] = &[
-    ("j/k, arrows", "move cursor"),
-    ("l, Enter", "open directory"),
-    ("h, Backspace", "parent directory"),
-    ("~", "go home"),
-    ("g", "goto path (supports / and ~)"),
-    ("1-9", "jump to sidebar bookmark"),
-    (".", "toggle hidden files"),
-    ("s / S", "cycle sort key / reverse"),
-    ("/", "search / filter"),
-    ("e", "open in nvim (offers to install; else $EDITOR)"),
-    ("o", "open with xdg-open"),
-    ("O", "open with (prompt for a command)"),
-    ("R, F5", "refresh listing + theme"),
-    ("Space", "toggle selection"),
-    ("a", "select all visible"),
-    ("Esc", "clear selection"),
-    ("c / x / p", "copy / cut / paste (via ftctl)"),
-    ("P", "show clipboard"),
-    ("d", "trash"),
-    ("D", "permanent delete (confirm)"),
-    ("r", "rename"),
-    ("n / t", "new directory / new file"),
-    ("L", "new symlink"),
-    ("?", "toggle this help"),
-    ("q, Ctrl+C", "quit"),
+struct HelpSection {
+    title: &'static str,
+    keys: &'static [(&'static str, &'static str)],
+}
+
+const HELP_SECTIONS: &[HelpSection] = &[
+    HelpSection {
+        title: "Navigation",
+        keys: &[
+            ("j/k, arrows", "move cursor"),
+            ("l, Enter", "open directory"),
+            ("h, Backspace", "parent directory"),
+            ("~", "go home"),
+            ("g", "goto path (/ and ~ work)"),
+            ("1-9", "jump to sidebar bookmark"),
+            ("/", "search / filter"),
+        ],
+    },
+    HelpSection {
+        title: "View",
+        keys: &[
+            (".", "toggle hidden files"),
+            ("s / S", "cycle sort key / reverse"),
+            ("R, F5", "refresh listing + theme"),
+            ("?", "toggle this help"),
+        ],
+    },
+    HelpSection {
+        title: "Open",
+        keys: &[
+            ("e", "nvim, offers to install"),
+            ("o", "open with xdg-open"),
+            ("O", "open with (custom command)"),
+        ],
+    },
+    HelpSection {
+        title: "Selection & Clipboard",
+        keys: &[
+            ("Space", "toggle selection"),
+            ("a", "select all visible"),
+            ("Esc", "clear selection"),
+            ("c / x / p", "copy / cut / paste"),
+            ("P", "show clipboard"),
+        ],
+    },
+    HelpSection {
+        title: "File Operations",
+        keys: &[
+            ("r", "rename"),
+            ("n / t", "new directory / new file"),
+            ("L", "new symlink"),
+            ("d", "trash"),
+            ("D", "permanent delete (confirm)"),
+        ],
+    },
+    HelpSection {
+        title: "General",
+        keys: &[("q, Ctrl+C", "quit")],
+    },
 ];
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -64,27 +98,76 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
 fn render_help(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
-    let popup = centered_rect(60, 80, area);
-
-    let lines: Vec<Line> = HELP_TEXT
-        .iter()
-        .map(|(key, desc)| {
-            Line::from(vec![
-                Span::styled(format!("{key:<14}"), Style::default().fg(theme.accent)),
-                Span::styled(*desc, Style::default().fg(theme.fg)),
-            ])
-        })
-        .collect();
+    let popup = centered_rect(80, 70, area);
 
     frame.render_widget(Clear, popup);
     let block = Block::default()
-        .title(" Help (press any key to close) ")
+        .title(" Help ")
+        .title_alignment(ratatui::layout::Alignment::Center)
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme.accent))
         .style(Style::default().bg(theme.bg_darker).fg(theme.fg));
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
-    frame.render_widget(Paragraph::new(lines), inner);
+
+    // Two columns, sections stacked top-to-bottom in each, so related keys
+    // read as a group instead of one long undifferentiated list.
+    let [left_area, gap, right_area] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Fill(1), Constraint::Length(2), Constraint::Fill(1)])
+        .areas(inner);
+    let _ = gap;
+
+    let mid = HELP_SECTIONS.len().div_ceil(2);
+    let (left_sections, right_sections) = HELP_SECTIONS.split_at(mid);
+
+    frame.render_widget(help_column(left_sections, theme), left_area);
+    frame.render_widget(help_column(right_sections, theme), right_area);
+
+    let footer = centered_rect_within(popup, popup.height.saturating_sub(2));
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "press any key to close",
+            Style::default().fg(theme.muted),
+        )))
+        .alignment(ratatui::layout::Alignment::Center),
+        footer,
+    );
+}
+
+fn help_column<'a>(sections: &'a [HelpSection], theme: &Theme) -> Paragraph<'a> {
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, section) in sections.iter().enumerate() {
+        if i > 0 {
+            lines.push(Line::from(""));
+        }
+        lines.push(Line::from(Span::styled(
+            section.title,
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(Span::styled(
+            "\u{2500}".repeat(section.title.len().max(8)),
+            Style::default().fg(theme.muted),
+        )));
+        for (key, desc) in section.keys {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{key:<16}"), Style::default().fg(theme.green)),
+                Span::styled(*desc, Style::default().fg(theme.fg)),
+            ]));
+        }
+    }
+    Paragraph::new(lines)
+}
+
+/// A single-row Rect, horizontally centered and pinned to the given row
+/// within `area` - used for the popup's footer hint line.
+fn centered_rect_within(area: Rect, row_from_top: u16) -> Rect {
+    Rect {
+        x: area.x,
+        y: area.y + row_from_top.min(area.height.saturating_sub(1)),
+        width: area.width,
+        height: 1,
+    }
 }
 
 fn centered_rect(pct_x: u16, pct_y: u16, area: Rect) -> Rect {
