@@ -39,6 +39,7 @@ ask_yn() {
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/tui-fm"
 STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/tui-fm"
+DESKTOP_FILE="${XDG_DATA_HOME:-${HOME}/.local/share}/applications/${NAME}.desktop"
 
 # 1. Remove binary
 if [[ -f "${INSTALL_DIR}/${NAME}" ]]; then
@@ -50,6 +51,17 @@ if [[ -f "${INSTALL_DIR}/${NAME}" ]]; then
     fi
 else
     info "No binary found at ${INSTALL_DIR}/${NAME}"
+fi
+
+# 1b. Remove desktop entry
+if [[ -f "${DESKTOP_FILE}" ]]; then
+    if ask_yn "Remove desktop entry at ${DESKTOP_FILE}?"; then
+        rm -f "${DESKTOP_FILE}"
+        command -v update-desktop-database &>/dev/null && update-desktop-database "$(dirname "${DESKTOP_FILE}")" &>/dev/null || true
+        ok "Removed ${DESKTOP_FILE}"
+    else
+        info "Skipped removing desktop entry"
+    fi
 fi
 
 # 2. Remove configuration

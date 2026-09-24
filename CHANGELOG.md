@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `install.sh` writes a standard XDG desktop entry (`~/.local/share/applications/fim.desktop`) so fim shows up in app launchers and menus, including Omarchy's own app search; `uninstall.sh` removes it.
+
 ## [0.1.0] - 2026-09-24
 
 Initial release.

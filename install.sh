@@ -235,12 +235,44 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# 9. Summary
+# 9. Desktop entry (only if not present) - lets ${NAME} show up in app
+#    launchers/menus (including Omarchy's own) via standard XDG discovery.
+# ---------------------------------------------------------------------------
+DESKTOP_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
+DESKTOP_FILE="${DESKTOP_DIR}/${NAME}.desktop"
+
+if [[ -f "${DESKTOP_FILE}" ]]; then
+    info "Desktop entry already present, skipping: ${DESKTOP_FILE}"
+else
+    mkdir -p "${DESKTOP_DIR}"
+    cat > "${DESKTOP_FILE}" <<EOF
+[Desktop Entry]
+Type=Application
+Name=${NAME}
+GenericName=File Manager
+Comment=Keyboard-driven TUI file manager for Arch/Omarchy
+TryExec=${NAME}
+Exec=${NAME}
+Terminal=true
+Icon=system-file-manager
+Categories=System;FileManager;FileTools;ConsoleOnly;
+Keywords=files;filemanager;terminal;tui;
+StartupNotify=false
+EOF
+    ok "Desktop entry written: ${DESKTOP_FILE}"
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "${DESKTOP_DIR}" &>/dev/null || true
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 10. Summary
 # ---------------------------------------------------------------------------
 printf '\n'
 ok "${NAME} ${VERSION} installation complete."
 info "Binary  : ${DEST}"
 info "Config  : ${CONFIG_FILE}"
+info "App menu: ${DESKTOP_FILE}"
 if FTCTL_BIN="$(resolve_ftctl)" && [[ -n "${FTCTL_BIN}" ]]; then
     info "ftctl   : ${FTCTL_BIN}"
 else
