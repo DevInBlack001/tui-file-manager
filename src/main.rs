@@ -107,6 +107,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::
 /// App::preview_graphics for why this is safe to do outside its normal
 /// diffing). Only writes anything when the image or its on-screen position
 /// actually changed since the last call.
+///
+/// Every transition away from a previously-shown image - to a different
+/// image, or to non-graphics content - clears that old image first. Sixel
+/// graphics aren't a separate compositing layer: they paint pixels directly
+/// into the cells they cover, so a new image (which may be a different size)
+/// only overwrites the cells it actually draws into, leaving any of the old
+/// image's cells outside that footprint behind unless explicitly cleared.
 fn sync_preview_graphics(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &App,
@@ -122,6 +129,9 @@ fn sync_preview_graphics(
                 return Ok(());
             }
             let backend = terminal.backend_mut();
+            if let Some((_, old_area)) = graphics_shown.take() {
+                clear_graphics_area(backend, old_area)?;
+            }
             // Inside the "Preview" block's border.
             queue!(backend, MoveTo(area.x + 1, area.y + 1))?;
             backend.write_all(bytes)?;
@@ -129,14 +139,32 @@ fn sync_preview_graphics(
             *graphics_shown = Some((path.to_path_buf(), area));
         }
         None => {
-            if graphics_shown.take().is_some() {
+            if let Some((_, old_area)) = graphics_shown.take() {
                 let backend = terminal.backend_mut();
-                backend.write_all(KITTY_CLEAR_ALL)?;
-                backend.flush()?;
+                clear_graphics_area(backend, old_area)?;
             }
         }
     }
     Ok(())
+}
+
+/// Clear a previously-blitted graphics image occupying `area`: delete any
+/// Kitty-protocol placements (a harmless no-op on a Sixel-only terminal),
+/// then blank every cell inside the border so leftover Sixel pixel data
+/// can't remain visible around the edges of whatever gets drawn next.
+fn clear_graphics_area(backend: &mut CrosstermBackend<Stdout>, area: Rect) -> io::Result<()> {
+    backend.write_all(KITTY_CLEAR_ALL)?;
+
+    let inner_width = area.width.saturating_sub(2);
+    let inner_height = area.height.saturating_sub(2);
+    if inner_width > 0 && inner_height > 0 {
+        let blank = " ".repeat(inner_width as usize);
+        for row in 0..inner_height {
+            queue!(backend, MoveTo(area.x + 1, area.y + 1 + row))?;
+            backend.write_all(blank.as_bytes())?;
+        }
+    }
+    backend.flush()
 }
 
 /// Suspend the TUI, run `bin args` in the foreground (e.g. `$EDITOR`), wait
