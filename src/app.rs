@@ -273,11 +273,22 @@ impl App {
                 self.preview_path = Some(path.clone());
                 if self.config.preview.enabled {
                     self.preview_content = PreviewContent::Loading;
+                    // preview_area is the *outer* rect handed to the "Preview"
+                    // Block, border included; content (and, critically, any
+                    // graphics image - see main.rs's sync_preview_graphics,
+                    // which blits at preview_area.{x,y} + 1, i.e. just inside
+                    // the border) is drawn into the 1-cell-smaller-on-each-
+                    // side inner area. Requesting the outer dimensions here
+                    // sized every image 2 columns/rows larger than the space
+                    // it's actually drawn into, so it overflowed past the
+                    // pane's own border.
+                    let inner_width = self.preview_area.width.saturating_sub(2);
+                    let inner_height = self.preview_area.height.saturating_sub(2);
                     self.previewer.request(
                         path,
                         is_dir,
-                        self.preview_area.width,
-                        self.preview_area.height,
+                        inner_width,
+                        inner_height,
                         self.config.preview.max_text_lines,
                         self.config.preview.max_binary_bytes,
                         self.config.preview.video_thumbs,
