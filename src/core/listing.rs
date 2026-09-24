@@ -159,7 +159,7 @@ fn sort_entries(entries: &mut Vec<Entry>, key: SortKey, reverse: bool) {
     entries.extend(files);
 }
 
-fn sort_group(group: &mut Vec<Entry>, key: SortKey, reverse: bool) {
+fn sort_group(group: &mut [Entry], key: SortKey, reverse: bool) {
     group.sort_by(|a, b| {
         let primary = match key {
             SortKey::Name => std::cmp::Ordering::Equal,

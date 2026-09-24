@@ -53,7 +53,7 @@ pub fn render(path: &std::path::Path, max_bytes: usize) -> crate::preview::Previ
 
 /// Format a byte slice as hex dump lines (16 bytes per line).
 fn format_hex(buf: &[u8]) -> Vec<String> {
-    let mut lines = Vec::with_capacity((buf.len() + 15) / 16);
+    let mut lines = Vec::with_capacity(buf.len().div_ceil(16));
     let mut offset = 0usize;
 
     for chunk in buf.chunks(16) {

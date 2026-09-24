@@ -28,7 +28,7 @@ pub fn render_preview(frame: &mut Frame, area: Rect, app: &App) {
     // internal buffer frame-to-frame, so leaving this area's buffer content
     // unchanged means it never re-emits anything for these cells, and the
     // separately-blitted terminal graphic is never redrawn over.
-    if matches!(app.preview_content, PreviewContent::KittyImage(_)) {
+    if matches!(app.preview_content, PreviewContent::RawGraphics(_)) {
         return;
     }
 
@@ -53,7 +53,7 @@ pub fn render_preview(frame: &mut Frame, area: Rect, app: &App) {
         }
         // Unreachable: handled by the early returns above. Kept as empty
         // arms (never a panic) so this match stays exhaustive.
-        PreviewContent::KittyImage(_) | PreviewContent::Glyph(_) => Vec::new(),
+        PreviewContent::RawGraphics(_) | PreviewContent::Glyph(_) => Vec::new(),
         PreviewContent::DirSummary {
             item_count,
             dirs,

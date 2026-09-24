@@ -327,7 +327,7 @@ fn secs_to_datetime(secs: u64) -> (u32, u32, u32, u32, u32) {
     let jdn: u32 = days + 2440588; // JDN of 1970-01-01 is 2440588
     let p = jdn + 68569;
     let q = 4 * p / 146097;
-    let r = p - (146097 * q + 3) / 4;
+    let r = p - (146097 * q).div_ceil(4);
     let s = 4000 * (r + 1) / 1461001;
     let t = r - 1461 * s / 4 + 31;
     let u = 80 * t / 2447;
@@ -373,12 +373,10 @@ fn lookup_id_in_file(file: &str, id: u32, cap_mb: u64) -> Option<String> {
     }
 
     let reader = io::BufReader::new(f.take(cap_mb * 1024 * 1024));
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         let parts: Vec<&str> = line.splitn(4, ':').collect();
-        if parts.len() >= 3 {
-            if parts[2].parse::<u32>().ok() == Some(id) {
-                return Some(parts[0].to_owned());
-            }
+        if parts.len() >= 3 && parts[2].parse::<u32>().ok() == Some(id) {
+            return Some(parts[0].to_owned());
         }
     }
     None

@@ -214,7 +214,7 @@ impl App {
     /// showing). `None` when the current preview isn't a graphics image.
     pub fn preview_graphics(&self) -> Option<(&std::path::Path, &[u8])> {
         match (&self.preview_content, &self.preview_path) {
-            (PreviewContent::KittyImage(bytes), Some(path)) => Some((path.as_path(), bytes.as_slice())),
+            (PreviewContent::RawGraphics(bytes), Some(path)) => Some((path.as_path(), bytes.as_slice())),
             _ => None,
         }
     }

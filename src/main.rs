@@ -56,7 +56,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::
     // The last (path, screen area) a terminal-graphics image was blitted
     // for, tracked outside App since it's terminal-IO state, not app state.
     // ratatui redraws the bordered "Preview" box every frame but never
-    // touches its interior for a KittyImage (see ui/preview.rs), so the
+    // touches its interior for a RawGraphics (see ui/preview.rs), so the
     // blitted image persists on screen without needing to be re-sent every
     // frame - only when the focused entry or the pane's on-screen position
     // actually changes.

@@ -122,6 +122,7 @@ All paths accept `~/` or `$HOME/` prefixes; nothing is ever hardcoded to a speci
 - No copy/move ever happens in-process; every transfer goes through `ftctl` with an explicit argument list.
 - Sensitive stat operations use `symlink_metadata` so symlinks are never silently followed, and symlink sources are validated against `$HOME` before being handed to `ftctl`.
 - All preview and config reads are size-capped, and no external tool is ever invoked through a shell or a bare, `$PATH`-searched name.
+- No subprocess fim spawns is ever allowed to query the terminal directly; see [TERMINAL_GRAPHICS.md](TERMINAL_GRAPHICS.md) for why that specific class of bug matters here.
 
 ## License
 

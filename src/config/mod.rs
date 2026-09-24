@@ -9,37 +9,33 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SortKey {
+    #[default]
     Name,
     Size,
     Mtime,
     Type,
 }
 
-impl Default for SortKey {
-    fn default() -> Self {
-        SortKey::Name
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ImageRenderer {
+    #[default]
     Auto,
     Chafa,
     None,
 }
 
-impl Default for ImageRenderer {
-    fn default() -> Self {
-        ImageRenderer::Auto
-    }
-}
 
 /// Where to load the colour theme from.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ThemeSource {
     /// Detect automatically: try Omarchy shell.toml, then built-in.
+    #[default]
     Auto,
     /// Always use the built-in fallback palette.
     Builtin,
@@ -47,11 +43,6 @@ pub enum ThemeSource {
     Path(PathBuf),
 }
 
-impl Default for ThemeSource {
-    fn default() -> Self {
-        ThemeSource::Auto
-    }
-}
 
 // Custom deserializer for ThemeSource so TOML can express it as a string or
 // as a table with a "path" key.
@@ -150,33 +141,22 @@ pub struct CustomBookmark {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct BookmarksConfig {
     /// If None, `$HOME/Work` is checked at runtime.
     pub work_dir: Option<PathBuf>,
     pub custom: Vec<CustomBookmark>,
 }
 
-impl Default for BookmarksConfig {
-    fn default() -> Self {
-        Self {
-            work_dir: None,
-            custom:   Vec::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct TransferConfig {
     /// Path to `ftctl` binary. If None, it is resolved from PATH at runtime.
     pub ftctl_path: Option<PathBuf>,
 }
 
-impl Default for TransferConfig {
-    fn default() -> Self {
-        Self { ftctl_path: None }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -212,10 +192,10 @@ pub struct Config {
 /// Expand a leading `~/` or `$HOME/` in a path string to the real home dir.
 fn expand_path(p: PathBuf, home: &std::path::Path) -> PathBuf {
     let s = p.to_string_lossy();
-    if s.starts_with("~/") {
-        home.join(&s["~/".len()..])
-    } else if s.starts_with("$HOME/") {
-        home.join(&s["$HOME/".len()..])
+    if let Some(rest) = s.strip_prefix("~/") {
+        home.join(rest)
+    } else if let Some(rest) = s.strip_prefix("$HOME/") {
+        home.join(rest)
     } else if s.as_ref() == "~" || s.as_ref() == "$HOME" {
         home.to_path_buf()
     } else {

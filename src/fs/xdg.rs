@@ -33,9 +33,9 @@ fn parse_user_dirs(content: &str, home: &Path) -> Vec<(String, PathBuf)> {
         // Strip surrounding quotes.
         let value = rest.trim().trim_matches('"');
         // Substitute $HOME at the start (the only variable used in user-dirs.dirs).
-        let expanded = if value.starts_with("$HOME/") {
-            format!("{}/{}", home_str, &value["$HOME/".len()..])
-        } else if value.starts_with("$HOME") && value.len() == 5 {
+        let expanded = if let Some(suffix) = value.strip_prefix("$HOME/") {
+            format!("{}/{}", home_str, suffix)
+        } else if value == "$HOME" {
             home_str.to_string()
         } else {
             value.to_string()

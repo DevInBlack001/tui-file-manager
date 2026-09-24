@@ -78,7 +78,7 @@ fn run_bat(path_str: &str, max_lines: usize) -> Result<Vec<String>, ()> {
     };
 
     // Lossy UTF-8 conversion to avoid panic on exotic byte sequences.
-    let text = String::from_utf8_lossy(&raw);
+    let text = String::from_utf8_lossy(raw);
     let lines: Vec<String> = text
         .split('\n')
         .take(max_lines)

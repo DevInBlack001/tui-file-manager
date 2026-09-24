@@ -13,13 +13,17 @@ const CHAFA_TIMEOUT_SECS: u64 = 10;
 ///
 /// `width` and `height` are the terminal character dimensions of the panel.
 /// `graphics`, from `detect_graphics_format`, selects real terminal graphics
-/// over character art when the terminal is known to support it.
+/// (Kitty protocol or Sixel, depending on what was detected) over character
+/// art when the terminal is known to support it. `passthrough`, from
+/// `detect_passthrough`, wraps that output for a terminal multiplexer
+/// (currently: tmux) sitting between fim and the real terminal.
 pub fn render(
     path: &std::path::Path,
     width: u16,
     height: u16,
     truecolor: bool,
     graphics: Option<&str>,
+    passthrough: Option<&str>,
 ) -> crate::preview::PreviewContent {
     // TOCTOU guard.
     if path.is_symlink() {
@@ -46,15 +50,22 @@ pub fn render(
     let size_arg = format!("{}x{}", width, height);
 
     if let Some(format) = graphics {
-        return match run_chafa_bytes(&[
+        let mut args = vec![
             "--format", format,
             "--probe", "off",
             "--relative", "off",
-            "--size", &size_arg,
-            "--",
-            path_str,
-        ]) {
-            Ok(bytes) => crate::preview::PreviewContent::KittyImage(bytes),
+        ];
+        if let Some(mode) = passthrough {
+            args.push("--passthrough");
+            args.push(mode);
+        }
+        args.push("--size");
+        args.push(&size_arg);
+        args.push("--");
+        args.push(path_str);
+
+        return match run_chafa_bytes(&args) {
+            Ok(bytes) => crate::preview::PreviewContent::RawGraphics(bytes),
             Err(msg) => crate::preview::PreviewContent::Unavailable(msg),
         };
     }
@@ -161,17 +172,35 @@ pub fn detect_truecolor() -> bool {
     }
 }
 
-/// Detect a real terminal graphics protocol chafa can target, from
-/// environment variables set by the terminal emulator itself - never a live
-/// query, which would reopen the probe/race class of bug fixed in `render`
-/// (querying the terminal and reading its response is exactly what raced our
-/// own key-event reader and leaked garbage into text prompts).
+/// Detect a real terminal graphics protocol chafa can target - never via a
+/// live query, which would reopen the probe/race class of bug fixed in
+/// `render` (querying the terminal and reading its response is exactly what
+/// raced our own key-event reader and leaked garbage into text prompts).
+///
+/// Two sources, in order:
+/// 1. Environment variables the terminal emulator itself sets at startup.
+///    Kitty, Ghostty, and WezTerm all implement the Kitty graphics protocol
+///    and identify themselves this way, so this is fully reliable.
+/// 2. `omarchy default terminal`, a local Omarchy CLI helper (not the
+///    terminal itself) that reports which of a closed set of terminals
+///    (alacritty/foot/ghostty/kitty) is configured as the system default.
+///    This is a *hint*, not a certainty - the terminal fim is actually
+///    running in might differ - but env-var detection alone cannot identify
+///    foot (it deliberately sets no distinguishing variable, and even
+///    unsets `TERM_PROGRAM` to avoid other apps misdetecting it), and this
+///    project explicitly targets Omarchy. Falls back to character art if
+///    wrong, same as any other detection miss.
 ///
 /// Returns a value for chafa's `--format` flag, or `None` to fall back to
-/// character art. Kitty, Ghostty, and WezTerm all implement the Kitty
-/// graphics protocol and identify themselves via environment variables at
-/// startup, so this is reliable without ever touching the terminal.
+/// character art.
 pub fn detect_graphics_format() -> Option<&'static str> {
+    if let Some(fmt) = detect_graphics_format_env() {
+        return Some(fmt);
+    }
+    detect_graphics_format_via_omarchy()
+}
+
+fn detect_graphics_format_env() -> Option<&'static str> {
     if std::env::var_os("KITTY_WINDOW_ID").is_some() {
         return Some("kitty");
     }
@@ -186,5 +215,39 @@ pub fn detect_graphics_format() -> Option<&'static str> {
             Some("kitty")
         }
         _ => None,
+    }
+}
+
+fn detect_graphics_format_via_omarchy() -> Option<&'static str> {
+    let omarchy = crate::fs::ops::resolve_bin("omarchy")?;
+    let output = std::process::Command::new(&omarchy)
+        .args(["default", "terminal"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    match String::from_utf8_lossy(&output.stdout).trim().to_lowercase().as_str() {
+        "kitty" | "ghostty" => Some("kitty"),
+        "foot" => Some("sixels"),
+        // alacritty (and anything else) has no well-supported native
+        // graphics protocol here; fall back to character art.
+        _ => None,
+    }
+}
+
+/// Detect a terminal multiplexer sitting between fim and the real terminal,
+/// for chafa's `--passthrough` flag. `$TMUX` is set unconditionally by tmux
+/// itself for every process it runs, so this is as reliable as the Kitty
+/// env-var checks above - not a live query.
+///
+/// Graphics still require `allow-passthrough on` in the user's tmux.conf;
+/// Omarchy's own default tmux config sets this already.
+pub fn detect_passthrough() -> Option<&'static str> {
+    if std::env::var_os("TMUX").is_some() {
+        Some("tmux")
+    } else {
+        None
     }
 }

@@ -38,12 +38,14 @@ pub enum PreviewContent {
     ChafaLines(Vec<String>),
     /// Hex dump lines.
     HexDump(Vec<String>),
-    /// Raw terminal graphics protocol payload (currently: chafa's `--format
-    /// kitty` output) for a real raster image, to be written directly to the
-    /// terminal, bypassing ratatui's cell buffer entirely. Only produced
-    /// when the terminal was detected (via environment variables only - see
-    /// `image::detect_graphics_format`, never a live query) to support it.
-    KittyImage(Vec<u8>),
+    /// Raw terminal graphics protocol payload (chafa's `--format kitty` or
+    /// `--format sixels` output, optionally wrapped for a multiplexer via
+    /// `--passthrough`) for a real raster image, to be written directly to
+    /// the terminal, bypassing ratatui's cell buffer entirely. Only
+    /// produced when the terminal was detected (see
+    /// `image::detect_graphics_format` - env vars or the local `omarchy`
+    /// CLI helper, never a live terminal query) to support it.
+    RawGraphics(Vec<u8>),
     /// A hand-drawn, theme-coloured ASCII glyph (e.g. disc icon for .iso,
     /// archive icon for .zip) shown instead of a hex dump for well-known
     /// binary container formats.
@@ -79,6 +81,12 @@ pub struct Previewer {
     pub receiver: Receiver<(PathBuf, PreviewContent)>,
 }
 
+impl Default for Previewer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Previewer {
     pub fn new() -> Self {
         let (req_tx, req_rx) = mpsc::sync_channel::<PreviewRequest>(1);
@@ -87,8 +95,9 @@ impl Previewer {
         thread::spawn(move || {
             let truecolor = image::detect_truecolor();
             let graphics = image::detect_graphics_format();
+            let passthrough = image::detect_passthrough();
             while let Ok(req) = req_rx.recv() {
-                let content = render_preview(&req, truecolor, graphics);
+                let content = render_preview(&req, truecolor, graphics, passthrough);
                 let _ = res_tx.send((req.path, content));
             }
         });
@@ -99,6 +108,7 @@ impl Previewer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn request(
         &self,
         path: PathBuf,
@@ -153,7 +163,12 @@ const DOCUMENT_EXTENSIONS: &[&str] = &[
     "xlsx", "xlsm", "xls", "docx", "docm", "doc", "pptx", "pptm", "ppt",
 ];
 
-fn render_preview(req: &PreviewRequest, truecolor: bool, graphics: Option<&str>) -> PreviewContent {
+fn render_preview(
+    req: &PreviewRequest,
+    truecolor: bool,
+    graphics: Option<&str>,
+    passthrough: Option<&str>,
+) -> PreviewContent {
     let path = &req.path;
     if req.is_dir {
         return directory::render(path);
@@ -181,9 +196,9 @@ fn render_preview(req: &PreviewRequest, truecolor: bool, graphics: Option<&str>)
     if crate::fs::mime::is_text(&mime) {
         text::render(path, req.max_text_lines)
     } else if crate::fs::mime::is_image(&mime) {
-        image::render(path, req.width, req.height, truecolor, graphics)
+        image::render(path, req.width, req.height, truecolor, graphics, passthrough)
     } else if crate::fs::mime::is_video(&mime) && req.video_thumbs {
-        video::render(path, req.width, req.height, truecolor, graphics)
+        video::render(path, req.width, req.height, truecolor, graphics, passthrough)
     } else if crate::fs::mime::is_pdf(&mime) {
         pdf::render(path, req.max_text_lines)
     } else {
