@@ -151,6 +151,12 @@ const ARCHIVE_EXTENSIONS: &[&str] = &[
 ];
 const TORRENT_EXTENSIONS: &[&str] = &["torrent"];
 
+// OpenVPN config files are plain text, so without this check they'd go
+// through the normal text preview - but they commonly embed certificates,
+// private keys, or plaintext credentials inline. Their content is never
+// shown; a glyph replaces it unconditionally.
+const VPN_EXTENSIONS: &[&str] = &["ovpn"];
+
 // OpenDocument and Microsoft Office document formats. These are zip
 // containers under the hood, but showing them as a generic "ARCHIVE" glyph
 // (or a hex dump, since mime_guess doesn't always resolve them to something
@@ -190,6 +196,9 @@ fn render_preview(
     }
     if TORRENT_EXTENSIONS.contains(&ext.as_str()) {
         return PreviewContent::Glyph(glyph::torrent());
+    }
+    if VPN_EXTENSIONS.contains(&ext.as_str()) {
+        return PreviewContent::Glyph(glyph::vpn());
     }
 
     let mime = crate::fs::mime::detect(path);

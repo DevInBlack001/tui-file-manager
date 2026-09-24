@@ -2,7 +2,7 @@
 
 A keyboard-driven, terminal-native file manager for Arch-based systems (Omarchy and similar), written in Rust.
 
-All file copy and move operations are delegated to the [file-transfer plugin](https://github.com/DevInBlack001/omarchy-transfer-manager) (`ftctl` / `filetransferd`), so every transfer is visible and controllable from the Quickshell Transfer Manager panel instead of blocking the file manager itself.
+All file copy and move operations are delegated to the [file-transfer plugin](https://github.com/DevInBlack001/omarchy-transfer-manager) (`ftctl` / `filetransferd`), so every transfer runs asynchronously and stays visible and controllable from the Quickshell Transfer Manager panel.
 
 ![fim browsing its own repository, with the live Omarchy theme and a syntax-highlighted Cargo.toml preview](assets/screenshot.png)
 
@@ -10,7 +10,7 @@ All file copy and move operations are delegated to the [file-transfer plugin](ht
 
 - Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel.
 - Live Omarchy theme integration: colors are read from the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`) and re-applied on demand with `R`. Falls back to a built-in dark palette on any non-Omarchy system.
-- Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), colorized image thumbnails (via `chafa`), video thumbnails (via `ffmpegthumbnailer` + `chafa`), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images (`.iso`) and archives (`.zip`, `.tar`, `.gz`, etc).
+- Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. `.ovpn` files always show the VPN glyph and never their content, since they commonly embed credentials.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
 - Selection, clipboard (copy/cut/paste, always via `ftctl`), trash (via `trash-cli`), permanent delete with a typed confirmation, rename, mkdir, touch, and symlink creation.
 - Search/filter, sort by name/size/mtime/type, hidden-file toggle, and a "goto path" prompt.
@@ -53,7 +53,7 @@ To remove fim (and optionally its config, state, and the `ftctl` plugin it insta
 
 ## Usage
 
-Run `fim` from any directory. Press `?` at any time for the full keybinding reference.
+Run `fim` from any directory. Press `?` at any time for the full keybinding reference. `fim --version` prints the version; `fim --help` prints the flag summary.
 
 | Key | Action |
 |---|---|

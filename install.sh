@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
-# installed by fim install.sh
-# install.sh - Build and install the fim binary, write default config,
-# and report optional dependency status.
+# install.sh - Build and install the binary named in meta.json, write
+# default config, and report optional dependency status.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Resolve the repo root from this script's location (no hardcoded paths).
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# Name/version - meta.json is this project's single source of truth (see
+# build.rs, which fails the Rust build if Cargo.toml's own name/version
+# fields ever disagree with it).
+# ---------------------------------------------------------------------------
+read_meta() {
+    grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${SCRIPT_DIR}/meta.json" \
+        | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'
+}
+NAME="$(read_meta name)"
+VERSION="$(read_meta version)"
 
 # ---------------------------------------------------------------------------
 # Flags
@@ -62,7 +73,7 @@ if [[ -z "${RUSTC_MAJOR}" || -z "${RUSTC_MINOR}" ]]; then
     warn "Could not parse rustc version '${RUSTC_VERSION}'; proceeding anyway."
 elif [[ "${RUSTC_MAJOR}" -lt 1 ]] || \
      [[ "${RUSTC_MAJOR}" -eq 1 && "${RUSTC_MINOR}" -lt 80 ]]; then
-    die "rustc ${RUSTC_VERSION} is too old; fim requires >= 1.80. Run: rustup update"
+    die "rustc ${RUSTC_VERSION} is too old; ${NAME} requires >= 1.80. Run: rustup update"
 else
     ok "rustc ${RUSTC_VERSION} (>= 1.80)"
 fi
@@ -153,11 +164,11 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Build the release binary
 # ---------------------------------------------------------------------------
-info "Building fim (release)..."
+info "Building ${NAME} ${VERSION} (release)..."
 cargo build --release --manifest-path "${SCRIPT_DIR}/Cargo.toml"
 ok "Build complete"
 
-BINARY="${SCRIPT_DIR}/target/release/fim"
+BINARY="${SCRIPT_DIR}/target/release/${NAME}"
 if [[ ! -f "${BINARY}" ]]; then
     die "Expected binary not found at ${BINARY}"
 fi
@@ -168,9 +179,9 @@ fi
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 mkdir -p "${INSTALL_DIR}"
 
-DEST="${INSTALL_DIR}/fim"
+DEST="${INSTALL_DIR}/${NAME}"
 if [[ -f "${DEST}" ]]; then
-    info "Replacing existing fim at ${DEST}"
+    info "Replacing existing ${NAME} at ${DEST}"
 fi
 cp "${BINARY}" "${DEST}"
 ok "Installed: ${DEST}"
@@ -227,7 +238,7 @@ fi
 # 9. Summary
 # ---------------------------------------------------------------------------
 printf '\n'
-ok "fim installation complete."
+ok "${NAME} ${VERSION} installation complete."
 info "Binary  : ${DEST}"
 info "Config  : ${CONFIG_FILE}"
 if FTCTL_BIN="$(resolve_ftctl)" && [[ -n "${FTCTL_BIN}" ]]; then

@@ -59,6 +59,22 @@ pub fn document() -> Vec<GlyphLine> {
     ]
 }
 
+/// Block-letter "VPN", for `.ovpn` files. OpenVPN configs commonly embed
+/// certificates, private keys, or credentials inline, so their content is
+/// never shown in the preview - this glyph replaces it unconditionally.
+pub fn vpn() -> Vec<GlyphLine> {
+    use GlyphColor::*;
+    vec![
+        line(&[("__     __ ", Yellow), (" ____  ", Accent), (" _   _ ", Cyan)]),
+        line(&[("\\ \\   / / ", Yellow), ("|  _ \\ ", Accent), ("| \\ | |", Cyan)]),
+        line(&[(" \\ \\ / /  ", Yellow), ("| |_) |", Accent), ("|  \\| |", Cyan)]),
+        line(&[("  \\ V /   ", Yellow), ("|  __/ ", Accent), ("| |\\  |", Cyan)]),
+        line(&[("   \\_/    ", Yellow), ("|_|    ", Accent), ("|_| \\_|", Cyan)]),
+        line(&[("", Fg)]),
+        line(&[("        VPN", Muted)]),
+    ]
+}
+
 /// Block-letter "P2P", for `.torrent` files.
 pub fn torrent() -> Vec<GlyphLine> {
     use GlyphColor::*;

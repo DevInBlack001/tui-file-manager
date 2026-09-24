@@ -27,6 +27,16 @@ const POLL_INTERVAL: Duration = Duration::from_millis(150);
 const KITTY_CLEAR_ALL: &[u8] = b"\x1b_Ga=d\x1b\\";
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print_help();
+        return;
+    }
+
     install_panic_hook();
 
     let cfg = config::load_or_default();
@@ -202,6 +212,22 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 
 /// Ensure the terminal is restored even if we panic, so a bug never leaves
 /// the user's shell in raw/alternate-screen mode.
+fn print_help() {
+    println!(
+        "{} {} - keyboard-driven TUI file manager for Arch/Omarchy",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    println!();
+    println!("Usage: fim [OPTIONS]");
+    println!();
+    println!("Options:");
+    println!("  -V, --version   Print version and exit");
+    println!("  -h, --help      Print this help and exit");
+    println!();
+    println!("Run with no arguments to browse the current directory. Press ? inside fim for the full keybinding reference.");
+}
+
 fn install_panic_hook() {
     let original = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {

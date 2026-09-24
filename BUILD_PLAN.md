@@ -400,6 +400,9 @@ dirs        = "5"       # XDG-aware home/config/data/state dir resolution
 
 [dev-dependencies]
 tempfile    = "3"
+
+[build-dependencies]
+serde_json  = "1"        # build.rs reads meta.json, the project's name/version source of truth
 ```
 
 No build-time C dependency beyond the Rust standard library. All crates are pure Rust or use only the Rust standard library's OS bindings.

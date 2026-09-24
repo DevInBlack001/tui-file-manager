@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# installed by fim install.sh
-# uninstall.sh - Remove fim binary, optionally config and runtime state.
+# uninstall.sh - Remove the binary named in meta.json, optionally config and
+# runtime state.
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Name/version - meta.json is this project's single source of truth (see
+# build.rs, which fails the Rust build if Cargo.toml's own name/version
+# fields ever disagree with it).
+read_meta() {
+    grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${SCRIPT_DIR}/meta.json" \
+        | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/'
+}
+NAME="$(read_meta name)"
 
 AUTO_YES=false
 for arg in "$@"; do
@@ -30,15 +41,15 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/tui-fm"
 STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/tui-fm"
 
 # 1. Remove binary
-if [[ -f "${INSTALL_DIR}/fim" ]]; then
-    if ask_yn "Remove binary at ${INSTALL_DIR}/fim?"; then
-        rm -f "${INSTALL_DIR}/fim"
-        ok "Removed ${INSTALL_DIR}/fim"
+if [[ -f "${INSTALL_DIR}/${NAME}" ]]; then
+    if ask_yn "Remove binary at ${INSTALL_DIR}/${NAME}?"; then
+        rm -f "${INSTALL_DIR}/${NAME}"
+        ok "Removed ${INSTALL_DIR}/${NAME}"
     else
         info "Skipped removing binary"
     fi
 else
-    info "No binary found at ${INSTALL_DIR}/fim"
+    info "No binary found at ${INSTALL_DIR}/${NAME}"
 fi
 
 # 2. Remove configuration
