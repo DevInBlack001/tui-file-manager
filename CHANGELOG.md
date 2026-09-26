@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-09-26
+
+### Added
+
+- `Tab` now cycles five layout combinations instead of just left/right: sidebar left, sidebar right, sidebar top (spanning the width, filelist/preview below it), sidebar hidden, and preview hidden. Config key renamed `ui.sidebar_position` -> `ui.layout_mode` (`left | right | top | no_sidebar | no_preview`).
+- Five more file list view modes alongside the original table, cycled with `v` (`ui.view_mode`): **compact** (name only), **detailed** (adds permissions/owner columns), **grid** (icon grid, no metadata), **tree** (`z` peeks a directory's immediate children inline without navigating into it), and **columns** (parent directory alongside the current one; the preview pane lists a focused subdirectory's contents instead of just a summary, ranger/Finder-style).
+- "Open with" (`O`) now offers a picker of installed applications discovered from `.desktop` `MimeType=` associations that claim to handle the focused file's type, before falling back to (`/`) a free-text command. This surfaces Wine/Proton-wrapped apps for free, since Lutris/Bottles/Heroic/Wine installers already register ordinary `.desktop` entries.
+
+### Fixed
+
+- The sidebar now auto-scrolls its highlighted entry into view. `LayoutMode::Top`'s shorter sidebar could otherwise leave later bookmarks permanently off-screen with no way to reach them.
+- Tree view's peeked children now use `theme.cyan` instead of `theme.blue` + the `DIM` modifier: `blue` resolves to the same RGB as `accent` (already used for borders) in both shipped themes, so the previous choice read as low-contrast/blended with the border rather than as a distinct color.
+
 ## [0.2.0] - 2026-09-26
 
 ### Added
