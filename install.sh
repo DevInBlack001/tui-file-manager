@@ -205,11 +205,14 @@ else
 # https://github.com/DevInBlack001/tui-file-manager
 
 [ui]
-show_hidden       = false
-sort_key          = "name"    # name | size | mtime | type
-sort_reverse      = false
-sidebar_width_pct = 18
-preview_width_pct = 36
+show_hidden         = false
+sort_key            = "name"    # name | size | mtime | type
+sort_reverse        = false
+sidebar_width_pct   = 18
+preview_width_pct   = 36
+sidebar_position    = "left"    # left | right
+sidebar_row_spacing = 1         # blank rows between sidebar entries
+show_icons          = true
 
 [preview]
 enabled          = true

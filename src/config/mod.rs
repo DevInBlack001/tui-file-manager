@@ -10,6 +10,15 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
+pub enum SidebarPosition {
+    #[default]
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SortKey {
     #[default]
     Name,
@@ -81,16 +90,25 @@ pub struct UiConfig {
     pub sidebar_width_pct: u8,
     /// Preview panel width as a percentage of terminal width (1-99).
     pub preview_width_pct: u8,
+    /// Which side of the screen the sidebar is drawn on.
+    pub sidebar_position: SidebarPosition,
+    /// Blank rows inserted between sidebar entries.
+    pub sidebar_row_spacing: u8,
+    /// Show Nerd Font type icons next to directory/file names.
+    pub show_icons: bool,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            show_hidden:       false,
-            sort_key:          SortKey::Name,
-            sort_reverse:      false,
-            sidebar_width_pct: 18,
-            preview_width_pct: 36,
+            show_hidden:         false,
+            sort_key:            SortKey::Name,
+            sort_reverse:        false,
+            sidebar_width_pct:   18,
+            preview_width_pct:   36,
+            sidebar_position:    SidebarPosition::Left,
+            sidebar_row_spacing: 1,
+            show_icons:          true,
         }
     }
 }
@@ -230,11 +248,14 @@ fn default_toml_content() -> &'static str {
 # https://github.com/DevInBlack001/tui-file-manager
 
 [ui]
-show_hidden       = false
-sort_key          = "name"
-sort_reverse      = false
-sidebar_width_pct = 18
-preview_width_pct = 36
+show_hidden         = false
+sort_key            = "name"
+sort_reverse        = false
+sidebar_width_pct   = 18
+preview_width_pct   = 36
+sidebar_position    = "left"    # left | right
+sidebar_row_spacing = 1         # blank rows between sidebar entries
+show_icons          = true
 
 [preview]
 enabled          = true

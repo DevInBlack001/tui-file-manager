@@ -8,7 +8,7 @@ All file copy and move operations are delegated to the [file-transfer plugin](ht
 
 ## Features
 
-- Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel.
+- Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. The sidebar can sit on either side, its row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
 - Live Omarchy theme integration: colors are read from the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`) and re-applied on demand with `R`. Falls back to a built-in dark palette on any non-Omarchy system.
 - Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. `.ovpn` files always show the VPN glyph and never their content, since they commonly embed credentials.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
@@ -28,6 +28,7 @@ Optional, for richer previews (checked and reported by `install.sh`):
 - `ffmpegthumbnailer` for video thumbnails.
 - `bat` for syntax-highlighted text previews.
 - `trash-cli` for the trash (`d`) action.
+- A [Nerd Font](https://www.nerdfonts.com/) in your terminal for the type icons (`show_icons = false` in config disables them on any other font).
 
 ## Installation
 
@@ -88,11 +89,14 @@ fim reads `$XDG_CONFIG_HOME/tui-fm/config.toml`, created with sensible defaults 
 
 ```toml
 [ui]
-show_hidden       = false
-sort_key          = "name"    # name | size | mtime | type
-sort_reverse      = false
-sidebar_width_pct = 18
-preview_width_pct = 36
+show_hidden         = false
+sort_key            = "name"    # name | size | mtime | type
+sort_reverse        = false
+sidebar_width_pct   = 18
+preview_width_pct   = 36
+sidebar_position    = "left"    # left | right
+sidebar_row_spacing = 1         # blank rows between sidebar entries
+show_icons          = true      # Nerd Font type icons; needs a Nerd Font in the terminal
 
 [preview]
 enabled          = true

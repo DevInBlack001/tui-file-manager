@@ -4,11 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-26
 
 ### Added
 
 - `install.sh` writes a standard XDG desktop entry (`~/.local/share/applications/fim.desktop`) so fim shows up in app launchers and menus, including Omarchy's own app search; `uninstall.sh` removes it.
+- Nerd Font type icons for directories and files in the file list and sidebar, toggled with `ui.show_icons`. Codepoints were verified against a real installed font's cmap rather than assumed from memory.
+- Configurable sidebar row spacing (`ui.sidebar_row_spacing`) and sidebar position (`ui.sidebar_position`, `left` or `right`).
+- PKGBUILD and `.SRCINFO` for AUR packaging as `tui-file-manager`.
 
 ## [0.1.0] - 2026-09-24
 

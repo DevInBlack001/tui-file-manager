@@ -2,6 +2,8 @@
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
+use crate::config::SidebarPosition;
+
 pub struct Panes {
     pub sidebar: Rect,
     pub filelist: Rect,
@@ -26,7 +28,7 @@ const STATS_HEIGHT: u16 = 13;
 /// below `MIN_SIDEBAR_COLS`, as long as the terminal is wide enough to
 /// afford it (on a pathologically narrow terminal it degrades gracefully
 /// down to whatever width is available rather than panicking).
-pub fn compute(area: Rect, sidebar_pct: u8, preview_pct: u8) -> Panes {
+pub fn compute(area: Rect, sidebar_pct: u8, preview_pct: u8, sidebar_position: SidebarPosition) -> Panes {
     let [body, status] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(1)])
@@ -38,14 +40,30 @@ pub fn compute(area: Rect, sidebar_pct: u8, preview_pct: u8) -> Panes {
     let preview_w = ((total as u32 * preview_pct.min(90) as u32) / 100) as u16;
     let filelist_w = total.saturating_sub(sidebar_w).saturating_sub(preview_w);
 
-    let [sidebar, filelist, preview] = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(sidebar_w),
-            Constraint::Length(filelist_w),
-            Constraint::Length(preview_w),
-        ])
-        .areas(body);
+    let (sidebar, filelist, preview) = match sidebar_position {
+        SidebarPosition::Left => {
+            let [sidebar, filelist, preview] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Length(sidebar_w),
+                    Constraint::Length(filelist_w),
+                    Constraint::Length(preview_w),
+                ])
+                .areas(body);
+            (sidebar, filelist, preview)
+        }
+        SidebarPosition::Right => {
+            let [filelist, preview, sidebar] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Length(filelist_w),
+                    Constraint::Length(preview_w),
+                    Constraint::Length(sidebar_w),
+                ])
+                .areas(body);
+            (sidebar, filelist, preview)
+        }
+    };
 
     let [preview_top, stats] = Layout::default()
         .direction(Direction::Vertical)

@@ -22,6 +22,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
     let mut idx = 1u8;
 
+    let row_gap = app.config.ui.sidebar_row_spacing;
+
     lines.push(section_header("PLACES", inner.width, theme));
     for bm in &app.bookmarks.sections {
         let is_current = if bm.is_recents {
@@ -29,7 +31,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             !app.viewing_recents && app.cwd == bm.path
         };
-        lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme));
+        lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
+        for _ in 0..row_gap {
+            lines.push(Line::from(""));
+        }
         idx += 1;
     }
 
@@ -38,7 +43,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(section_header("BOOKMARKS", inner.width, theme));
         for bm in &app.bookmarks.custom {
             let is_current = !app.viewing_recents && app.cwd == bm.path;
-            lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme));
+            lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
+            for _ in 0..row_gap {
+                lines.push(Line::from(""));
+            }
             idx += 1;
         }
     }
@@ -59,9 +67,22 @@ fn section_header(title: &str, width: u16, theme: &Theme) -> Line<'static> {
     ])
 }
 
-fn bookmark_line<'a>(name: &'a str, exists: bool, is_current: bool, idx: u8, width: u16, theme: &Theme) -> Line<'a> {
+fn bookmark_line<'a>(
+    name: &'a str,
+    exists: bool,
+    is_current: bool,
+    idx: u8,
+    width: u16,
+    theme: &Theme,
+    show_icons: bool,
+) -> Line<'a> {
     let number = if idx <= 9 { idx.to_string() } else { " ".to_string() };
     let marker = if is_current { "\u{25b8}" } else { " " };
+    let icon = if show_icons {
+        if is_current { "\u{f07c} " } else { "\u{f07b} " } // fa-folder_open / fa-folder
+    } else {
+        ""
+    };
 
     let row_bg = if is_current { Some(theme.selection_bg) } else { None };
     let with_bg = |mut s: Style| {
@@ -86,12 +107,13 @@ fn bookmark_line<'a>(name: &'a str, exists: bool, is_current: bool, idx: u8, wid
     };
     let marker_style = with_bg(Style::default().fg(if is_current { theme.accent } else { theme.bg }));
 
-    let content_len = 4 + name.chars().count(); // "M N " + name
+    let content_len = 4 + icon.chars().count() + name.chars().count(); // "M N " + icon + name
     let pad = " ".repeat((width as usize).saturating_sub(content_len));
 
     let mut spans = vec![
         Span::styled(format!("{marker} "), marker_style),
         Span::styled(format!("{number} "), number_style),
+        Span::styled(icon, name_style),
         Span::styled(name, name_style),
     ];
     if is_current && !pad.is_empty() {

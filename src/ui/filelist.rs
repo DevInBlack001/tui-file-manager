@@ -86,7 +86,13 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .enumerate()
         .map(|(i, entry)| {
             let real_idx = start + i;
-            row_for_entry(entry, real_idx == app.cursor, app.selected.contains(&entry.path), theme)
+            row_for_entry(
+                entry,
+                real_idx == app.cursor,
+                app.selected.contains(&entry.path),
+                theme,
+                app.config.ui.show_icons,
+            )
         })
         .collect();
 
@@ -99,7 +105,42 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(table, inner);
 }
 
-fn row_for_entry<'a>(entry: &Entry, is_cursor: bool, is_selected: bool, theme: &Theme) -> Row<'a> {
+/// Nerd Font glyph for an entry, chosen by type/extension. Codepoints are
+/// verified against JetBrainsMonoNerdFont's real cmap (not guessed from
+/// memory - several plausible-looking PUA codepoints turned out to map to
+/// unrelated glyphs, e.g. fa-steam instead of a music icon).
+fn icon_for(entry: &Entry) -> &'static str {
+    if entry.is_broken_symlink || entry.is_symlink {
+        return "\u{f0c1}"; // fa-link
+    }
+    if entry.is_dir {
+        return "\u{f07b}"; // fa-folder
+    }
+    if entry.is_executable() {
+        return "\u{f489}"; // oct-terminal
+    }
+    let ext = entry
+        .path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    match ext.as_str() {
+        "rs" | "py" | "js" | "ts" | "tsx" | "jsx" | "go" | "c" | "cpp" | "h" | "hpp" | "java"
+        | "sh" | "toml" | "json" | "yaml" | "yml" | "lua" | "html" | "css" => "\u{f1c9}", // fa-file_code_o
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" => "\u{f1c5}", // fa-file_picture_o
+        "pdf" => "\u{f1c1}",                                                  // fa-file_pdf_o
+        "xls" | "xlsx" | "csv" => "\u{f1c3}",                                 // fa-file_excel_o
+        "doc" | "docx" | "odt" => "\u{f1c2}",                                 // fa-file_word_o
+        "ppt" | "pptx" | "odp" => "\u{f1c4}",                                 // fa-file_powerpoint_o
+        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" | "rar" | "zst" => "\u{f1c6}", // fa-file_zipper
+        "mp3" | "flac" | "wav" | "ogg" | "m4a" => "\u{f1c7}",                 // fa-file_sound_o
+        "mp4" | "mkv" | "webm" | "avi" | "mov" => "\u{f03d}",                 // fa-video_camera
+        _ => "\u{f15b}",                                                      // fa-file
+    }
+}
+
+fn row_for_entry<'a>(entry: &Entry, is_cursor: bool, is_selected: bool, theme: &Theme, show_icons: bool) -> Row<'a> {
     let name_color = if entry.is_broken_symlink {
         theme.red
     } else if entry.is_symlink {
@@ -113,7 +154,11 @@ fn row_for_entry<'a>(entry: &Entry, is_cursor: bool, is_selected: bool, theme: &
     };
 
     let marker = if is_selected { "\u{2713} " } else { "  " };
-    let name_span = format!("{marker}{}", entry.display_name());
+    let name_span = if show_icons {
+        format!("{marker}{} {}", icon_for(entry), entry.display_name())
+    } else {
+        format!("{marker}{}", entry.display_name())
+    };
 
     let mut style = Style::default().fg(name_color);
     if is_cursor {

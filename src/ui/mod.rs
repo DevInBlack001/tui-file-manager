@@ -81,7 +81,12 @@ const HELP_SECTIONS: &[HelpSection] = &[
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
-    let panes = layout::compute(area, app.config.ui.sidebar_width_pct, app.config.ui.preview_width_pct);
+    let panes = layout::compute(
+        area,
+        app.config.ui.sidebar_width_pct,
+        app.config.ui.preview_width_pct,
+        app.config.ui.sidebar_position,
+    );
 
     app.preview_area = panes.preview;
 
