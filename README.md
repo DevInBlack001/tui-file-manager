@@ -23,7 +23,7 @@ A keyboard-driven, terminal-native file manager written in Rust, built for and t
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
 - Selection, clipboard (copy/cut/paste, always via `ftctl`), trash (via `trash-cli`), permanent delete with a typed confirmation, rename, mkdir, touch, and symlink creation.
 - Search/filter, sort by name/size/mtime/type, hidden-file toggle, and a "goto path" prompt.
-- Open the focused file in `nvim` by default (offers to install it if missing, falling back to `$EDITOR` otherwise), via `xdg-open`, or via an arbitrary "open with" command.
+- Open the focused file in `nvim` by default (offers to install it if missing, falling back to `$EDITOR` otherwise), via `xdg-open`, or via "open with" (`O`), which offers a picker of installed applications discovered from `.desktop` MIME associations (this naturally includes Wine/Proton-wrapped apps too, since Lutris/Bottles/Heroic/Wine installers register ordinary `.desktop` entries) before falling back to a free-text command.
 - Every external tool is invoked with an explicit argument list and a resolved absolute path; nothing is ever run through a shell.
 
 ## Requirements
@@ -81,7 +81,7 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `/` | Search / filter |
 | `e` | Open in `nvim` (or `$EDITOR`) |
 | `o` | Open with `xdg-open` |
-| `O` | Open with (prompts for a command) |
+| `O` | Open with: pick from installed apps that handle the file's type, or `/` for a custom command |
 | `R`, `F5` | Refresh listing and theme |
 | `Space` | Toggle selection |
 | `a` | Select all visible |

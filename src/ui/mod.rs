@@ -53,7 +53,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
         keys: &[
             ("e", "nvim, offers to install"),
             ("o", "open with xdg-open"),
-            ("O", "open with (custom command)"),
+            ("O", "open with (picks from installed apps, or type a command)"),
         ],
     },
     HelpSection {
@@ -106,6 +106,52 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if matches!(app.mode, Mode::Help) {
         render_help(frame, area, app);
     }
+    if let Mode::OpenWithPicker { apps, selected } = &app.mode {
+        render_open_with_picker(frame, area, app, apps, *selected);
+    }
+}
+
+fn render_open_with_picker(frame: &mut Frame, area: Rect, app: &App, apps: &[crate::fs::desktop_apps::DesktopApp], selected: usize) {
+    let theme = &app.theme;
+    let popup = centered_rect(60, 60, area);
+
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .title(" Open With ")
+        .title_alignment(ratatui::layout::Alignment::Center)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.accent))
+        .style(Style::default().bg(theme.bg_darker).fg(theme.fg));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+
+    let [list_area, footer] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .areas(inner);
+
+    let lines: Vec<Line> = apps
+        .iter()
+        .enumerate()
+        .map(|(i, app)| {
+            let style = if i == selected {
+                Style::default().fg(theme.fg_bright).bg(theme.selection_bg).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.fg)
+            };
+            Line::from(Span::styled(format!(" {} ", app.name), style))
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lines), list_area);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "j/k move, Enter open, / custom command, Esc cancel",
+            Style::default().fg(theme.muted),
+        )))
+        .alignment(ratatui::layout::Alignment::Center),
+        footer,
+    );
 }
 
 fn render_help(frame: &mut Frame, area: Rect, app: &App) {

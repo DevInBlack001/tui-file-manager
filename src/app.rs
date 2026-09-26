@@ -16,6 +16,7 @@ use ratatui::layout::Rect;
 use crate::config::{Config, SortKey};
 use crate::core::bookmarks::{self, Bookmark, Bookmarks};
 use crate::core::{ClipMode, Clipboard, Entry, Job, Listing, Recents, TransferClient, TransferError};
+use crate::fs::desktop_apps::{self, DesktopApp};
 use crate::fs::ops::{self, OpResult};
 use crate::fs::xdg::XdgDirs;
 use crate::preview::{PreviewContent, Previewer};
@@ -71,6 +72,10 @@ pub enum Mode {
     /// installing it via `sudo pacman -S neovim`.
     ConfirmInstallEditor,
     Help,
+    /// "Open with" app picker: applications discovered via `.desktop`
+    /// `MimeType=` associations that claim to handle the focused file. `/`
+    /// switches to the free-text `Prompt(OpenWith, _)` for a custom command.
+    OpenWithPicker { apps: Vec<DesktopApp>, selected: usize },
 }
 
 pub struct StatusMsg {
@@ -775,6 +780,70 @@ impl App {
         }
     }
 
+    /// `O`: offer a picker of installed applications that declare (via
+    /// `.desktop` `MimeType=`) they can open the focused file - this also
+    /// surfaces Wine/Proton-wrapped apps automatically, since their
+    /// installers (Lutris, Bottles, Heroic, plain Wine) register ordinary
+    /// `.desktop` entries in the same places. Falls back straight to the
+    /// free-text prompt when the focused entry is a directory (no MIME type)
+    /// or nothing matched, so typing a custom command always still works.
+    fn open_with_menu(&mut self) {
+        let Some(mime) = self.focused_mime.clone() else {
+            self.mode = Mode::Prompt(PromptKind::OpenWith, String::new());
+            return;
+        };
+        let apps = desktop_apps::candidates_for_mime(&mime);
+        self.mode = if apps.is_empty() {
+            Mode::Prompt(PromptKind::OpenWith, String::new())
+        } else {
+            Mode::OpenWithPicker { apps, selected: 0 }
+        };
+    }
+
+    fn handle_open_with_picker_key(&mut self, key: KeyEvent, apps: Vec<DesktopApp>, selected: usize) {
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                let next = (selected + 1).min(apps.len().saturating_sub(1));
+                self.mode = Mode::OpenWithPicker { apps, selected: next };
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                let prev = selected.saturating_sub(1);
+                self.mode = Mode::OpenWithPicker { apps, selected: prev };
+            }
+            KeyCode::Enter => {
+                if let Some(app) = apps.into_iter().nth(selected) {
+                    self.open_with_desktop_app(&app);
+                }
+                self.mode = Mode::Normal;
+            }
+            KeyCode::Char('/') | KeyCode::Char('c') => {
+                self.mode = Mode::Prompt(PromptKind::OpenWith, String::new());
+            }
+            KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Normal,
+            _ => self.mode = Mode::OpenWithPicker { apps, selected },
+        }
+    }
+
+    fn open_with_desktop_app(&mut self, app: &DesktopApp) {
+        let Some(entry) = self.focused_entry() else { return };
+        let path = entry.path.clone();
+        match desktop_apps::resolve_desktop_exec(&app.exec, &path) {
+            Some((bin, args)) => {
+                let spawned = std::process::Command::new(&bin)
+                    .args(&args)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+                match spawned {
+                    Ok(_) => self.set_status(format!("opened with {}", app.name)),
+                    Err(e) => self.set_error(format!("failed to launch '{}': {e}", app.name)),
+                }
+            }
+            None => self.set_error(format!("'{}' binary not found", app.name)),
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Key handling
     // -----------------------------------------------------------------------
@@ -793,6 +862,7 @@ impl App {
             Mode::Prompt(kind, buf) => self.handle_prompt_key(key, kind, buf),
             Mode::ConfirmDelete(buf) => self.handle_confirm_delete_key(key, buf),
             Mode::ConfirmInstallEditor => return self.handle_confirm_install_editor_key(key),
+            Mode::OpenWithPicker { apps, selected } => self.handle_open_with_picker_key(key, apps, selected),
         }
         Action::None
     }
@@ -847,7 +917,7 @@ impl App {
             KeyCode::Char('n') => self.mode = Mode::Prompt(PromptKind::Mkdir, String::new()),
             KeyCode::Char('t') => self.mode = Mode::Prompt(PromptKind::Touch, String::new()),
             KeyCode::Char('L') => self.mode = Mode::Prompt(PromptKind::SymlinkTarget, String::new()),
-            KeyCode::Char('O') => self.mode = Mode::Prompt(PromptKind::OpenWith, String::new()),
+            KeyCode::Char('O') => self.open_with_menu(),
             KeyCode::Char('?') => self.mode = Mode::Help,
             KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
                 let idx = c.to_digit(10).unwrap() as usize - 1;
