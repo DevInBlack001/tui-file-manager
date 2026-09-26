@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-09-26
+
+### Added
+
+- Theme auto-detection now tries [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`) between Omarchy's live theme and the built-in fallback palette. pywal is a common Arch Linux ricing convention with no tie to Omarchy or any particular desktop environment, so a non-Omarchy Arch system with it set up now gets a real live theme instead of only ever seeing the static default.
+- Project scope is now explicitly Arch Linux and its derivatives (not "any Linux distro"). Within that scope, the nvim auto-install (`pacman -S neovim`) and chafa auto-install (`install.sh`) are both fine as unconditional `pacman` calls, since every supported system has `pacman` by definition.
+
+### Fixed
+
+- `aether::load_from_file` (the Omarchy/pywal TOML theme parser) returned `Ok` full of nothing but hardcoded default colors for a file with none of the recognized color keys at all - e.g. an Omarchy `shell.toml` that only holds font settings on some installs. Theme auto-detection's candidate chain treated that as "a real theme was found" and never tried the next candidate, silently swallowing the new pywal tier (and meaning the fallback palette was already being reached this way before pywal existed, just with no visible difference). It now requires at least one recognized key before accepting a file as a theme source.
+
 ## [0.3.1] - 2026-09-26
 
 ### Fixed

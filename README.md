@@ -1,16 +1,18 @@
 # fim
 
-A keyboard-driven, terminal-native file manager written in Rust, built for and tested on Omarchy but not tied to it.
+A keyboard-driven, terminal-native file manager written in Rust for Arch Linux and its derivatives - built for and tested on Omarchy, but not tied to it.
 
 ## Portability
 
-- **Runs on any Linux distro.** Nothing in fim itself requires Arch, `pacman`, Omarchy, or Quickshell; every Omarchy-specific integration point degrades gracefully when it isn't present:
-  - **Theme**: reads Omarchy's live theme file when available, otherwise falls back to a built-in dark palette.
-  - **Image/video previews**: uses the Kitty graphics protocol or Sixel when the terminal supports it (detected from environment variables, or `omarchy default terminal` as an optional hint), otherwise falls back to `chafa` character art.
-  - **`install.sh`**: only uses `pacman` opportunistically to auto-install `chafa`; on a non-Arch distro it just skips that step and tells you what to install manually. `cargo`/`rustc` are the only hard requirements.
-- **Arch (and `pacman`) get more automation**, not more functionality: `install.sh`'s auto-install steps for optional tools only fire when `pacman` is present.
+fim targets **Arch Linux and its derivatives** (Omarchy, EndeavourOS, Manjaro, CachyOS, vanilla Arch, etc.) - not other distros. Within that scope, almost nothing is actually tied to Omarchy specifically:
+
+- **Theme**: tries, in order, Omarchy's live theme file, then [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`) - a ricing convention used across Arch generally, with no tie to Omarchy or any particular desktop environment - then a built-in dark palette. A non-Omarchy Arch system with pywal set up still gets a real live theme, not just the static default.
+- **Image/video previews**: uses the Kitty graphics protocol or Sixel purely based on what the terminal supports (detected from environment variables, or `omarchy default terminal` as an optional hint when those are inconclusive), falling back to `chafa` character art on any other terminal. This was never Omarchy-gated in the first place - it's terminal-capability detection.
+- **`install.sh`**: auto-installs `chafa` via `pacman`, which every Arch-based system has by definition.
+- **Auto-installing `nvim`** (`e` when it's missing) runs `pacman -S neovim` directly, since `pacman` is guaranteed on every supported system; declining falls back to `$EDITOR`.
 - **Quickshell is never required.** fim never calls Quickshell itself; it's purely an optional piece of the Omarchy desktop that can show live transfer-job status from `ftctl` in its own panel, on top of the status fim already shows in its own stats panel.
-- **Copy/move/paste requires [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager)**, a standalone daemon fim delegates to as a plain subprocess. It has no Omarchy or Quickshell dependency of its own; without it, paste is a no-op with a clear error rather than a crash.
+- **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager), a standalone daemon with no Omarchy or Quickshell dependency of its own (it needs only `python3`, `rsync`, and `systemd --user`) - fim delegates to it as a plain subprocess. Without it, paste is a no-op with a clear error rather than a crash.
+- **XDG desktop entry / "Open With" app picker**: standard XDG mechanisms (`.desktop` files, `$XDG_DATA_DIRS`), not Omarchy-specific at all.
 
 ![fim browsing its own repository, with the live Omarchy theme and a syntax-highlighted Cargo.toml preview](assets/screenshot.png)
 

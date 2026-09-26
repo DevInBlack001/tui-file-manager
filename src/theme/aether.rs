@@ -3,7 +3,7 @@ use ratatui::style::Color;
 use std::io::Read;
 
 /// Parse a `#RRGGBB` hex string into a ratatui `Color::Rgb`.
-fn parse_hex(s: &str) -> Result<Color, String> {
+pub(crate) fn parse_hex(s: &str) -> Result<Color, String> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 {
         return Err(format!("expected 6 hex digits, got '{s}'"));
@@ -52,6 +52,24 @@ pub fn load_from_file(path: &std::path::Path) -> Result<Theme, String> {
 
     let value: toml::Value = toml::from_str(&buf)
         .map_err(|e| format!("TOML parse error in {}: {e}", path.display()))?;
+
+    // `get_color` falls back to a hardcoded default for any single missing
+    // key, which is right for a theme file that's *mostly* complete - but it
+    // means a file with none of these keys at all (e.g. Omarchy's
+    // shell.toml, which on some installs holds only font settings) would
+    // otherwise still return `Ok` full of nothing but defaults, and the
+    // auto-detection candidate chain in theme/mod.rs would wrongly treat
+    // that as "a real theme was found" and never try the next candidate
+    // (pywal, then the builtin palette). Require at least one recognized key
+    // before accepting this file as a theme source.
+    const KEYS: &[&str] = &[
+        "foreground", "dark_foreground", "bright_foreground", "background",
+        "dark_background", "darker_background", "lighter_background", "selection",
+        "accent", "muted", "red", "green", "yellow", "cyan", "blue", "magenta",
+    ];
+    if !KEYS.iter().any(|k| value.get(k).is_some()) {
+        return Err(format!("no recognized color keys in {}", path.display()));
+    }
 
     // Sensible fallback colours (match fallback_theme palette).
     let def_fg       = Color::Rgb(190, 249, 243);
