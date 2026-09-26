@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.7] - 2026-09-26
+
+### Fixed
+
+- MTP phone auto-mount never actually started `gvfsd-fuse`. That daemon is installed under `/usr/lib` on Arch, not on a normal user's `$PATH`, so `resolve_bin`'s bare-name `$PATH` search silently returned nothing every time. Added a dedicated resolver: `$FIM_GVFSD_FUSE` override, then `$PATH`, then the real-world `/usr/lib/gvfsd-fuse` / `/usr/libexec/gvfsd-fuse` candidate locations. Verified live against a real phone: `gvfsd-fuse` now starts and the phone appears in the sidebar within one poll cycle.
+
 ## [0.3.6] - 2026-09-26
 
 ### Fixed

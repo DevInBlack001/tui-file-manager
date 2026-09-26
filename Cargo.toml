@@ -1,6 +1,6 @@
 [package]
 name = "fim"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 authors = ["DevInBlack001"]
 license = "MIT"

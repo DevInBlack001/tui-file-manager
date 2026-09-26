@@ -205,12 +205,36 @@ fn is_process_running(name: &str) -> bool {
 /// phones, to a real path under `$XDG_RUNTIME_DIR/gvfs`) if it isn't already
 /// running. Fire-and-forget: it's a persistent session daemon, the same as
 /// a full desktop session would start once and leave running.
+/// `gvfsd-fuse` is an internal daemon binary, conventionally installed under
+/// `/usr/lib` (confirmed via `pacman -Ql gvfs` on Arch) rather than anywhere
+/// on a normal user's `$PATH` - `resolve_bin`'s bare-name `$PATH` search
+/// alone never finds it, silently no-opping every call. `$FIM_GVFSD_FUSE`
+/// overrides this for a non-standard install; otherwise the real-world
+/// candidate locations below are tried in order.
+fn resolve_gvfsd_fuse() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("FIM_GVFSD_FUSE").map(PathBuf::from) {
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    if let Some(p) = resolve_bin("gvfsd-fuse") {
+        return Some(p);
+    }
+    for candidate in ["/usr/lib/gvfsd-fuse", "/usr/libexec/gvfsd-fuse"] {
+        let p = PathBuf::from(candidate);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 fn ensure_gvfs_fuse_running() {
     if is_process_running("gvfsd-fuse") {
         return;
     }
     let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else { return };
-    let Some(bin) = resolve_bin("gvfsd-fuse") else { return };
+    let Some(bin) = resolve_gvfsd_fuse() else { return };
     let _ = Command::new(bin)
         .arg(runtime_dir.join("gvfs"))
         .arg("-f")
