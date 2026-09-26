@@ -21,6 +21,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
     let mut lines: Vec<Line> = Vec::new();
     let mut idx = 1u8;
+    let mut current_line: usize = 0;
 
     let row_gap = app.config.ui.sidebar_row_spacing;
 
@@ -31,6 +32,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             !app.viewing_recents && app.cwd == bm.path
         };
+        if is_current {
+            current_line = lines.len();
+        }
         lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
         for _ in 0..row_gap {
             lines.push(Line::from(""));
@@ -43,6 +47,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(section_header("BOOKMARKS", inner.width, theme));
         for bm in &app.bookmarks.custom {
             let is_current = !app.viewing_recents && app.cwd == bm.path;
+            if is_current {
+                current_line = lines.len();
+            }
             lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
             for _ in 0..row_gap {
                 lines.push(Line::from(""));
@@ -51,7 +58,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         }
     }
 
-    frame.render_widget(Paragraph::new(lines), inner);
+    // Auto-scroll: with a short sidebar (e.g. LayoutMode::Top capping it to a
+    // few rows), keep the highlighted entry in view rather than silently
+    // clipping the bottom of the list with no way to reach it.
+    let visible = inner.height as usize;
+    let scroll_y = if lines.len() <= visible {
+        0
+    } else {
+        let max_start = lines.len() - visible;
+        current_line.saturating_sub(visible / 2).min(max_start)
+    };
+
+    frame.render_widget(Paragraph::new(lines).scroll((scroll_y as u16, 0)), inner);
 }
 
 fn section_header(title: &str, width: u16, theme: &Theme) -> Line<'static> {

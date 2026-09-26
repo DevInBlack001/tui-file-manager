@@ -7,13 +7,93 @@ use std::path::PathBuf;
 // Enums
 // ---------------------------------------------------------------------------
 
+/// Named layout combinations: which panes are shown and where the sidebar
+/// sits, cycled at runtime with `Tab`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum LayoutMode {
+    /// sidebar | filelist | preview (the original layout).
+    #[default]
+    Left,
+    /// filelist | preview | sidebar.
+    Right,
+    /// sidebar spans the top, filelist | preview below.
+    Top,
+    /// sidebar hidden; filelist gets the extra width.
+    NoSidebar,
+    /// preview hidden; filelist gets the extra width.
+    NoPreview,
+}
+
+impl LayoutMode {
+    /// The order `Tab` cycles through.
+    pub fn next(self) -> Self {
+        match self {
+            LayoutMode::Left => LayoutMode::Right,
+            LayoutMode::Right => LayoutMode::Top,
+            LayoutMode::Top => LayoutMode::NoSidebar,
+            LayoutMode::NoSidebar => LayoutMode::NoPreview,
+            LayoutMode::NoPreview => LayoutMode::Left,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LayoutMode::Left => "sidebar left",
+            LayoutMode::Right => "sidebar right",
+            LayoutMode::Top => "sidebar top",
+            LayoutMode::NoSidebar => "sidebar hidden",
+            LayoutMode::NoPreview => "preview hidden",
+        }
+    }
+}
+
+/// How the file list renders its entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
-pub enum SidebarPosition {
+pub enum ViewMode {
+    /// Name, size, mtime columns (the original view).
     #[default]
-    Left,
-    Right,
+    List,
+    /// Name only, one line per entry - fits more files on screen.
+    Compact,
+    /// List columns plus permissions, owner, and link count.
+    Detailed,
+    /// Icon grid, no metadata columns.
+    Grid,
+    /// The current directory's list, with one directory's immediate children
+    /// peekable inline (toggle with `z`) without navigating into it.
+    Tree,
+    /// Parent directory alongside the current one; the preview pane lists a
+    /// focused subdirectory's contents instead of just a summary.
+    Columns,
+}
+
+impl ViewMode {
+    /// The order `v` cycles through.
+    pub fn next(self) -> Self {
+        match self {
+            ViewMode::List => ViewMode::Compact,
+            ViewMode::Compact => ViewMode::Detailed,
+            ViewMode::Detailed => ViewMode::Grid,
+            ViewMode::Grid => ViewMode::Tree,
+            ViewMode::Tree => ViewMode::Columns,
+            ViewMode::Columns => ViewMode::List,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewMode::List => "list",
+            ViewMode::Compact => "compact",
+            ViewMode::Detailed => "detailed",
+            ViewMode::Grid => "grid",
+            ViewMode::Tree => "tree",
+            ViewMode::Columns => "columns",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -90,12 +170,14 @@ pub struct UiConfig {
     pub sidebar_width_pct: u8,
     /// Preview panel width as a percentage of terminal width (1-99).
     pub preview_width_pct: u8,
-    /// Which side of the screen the sidebar is drawn on.
-    pub sidebar_position: SidebarPosition,
+    /// Named layout combination (sidebar side/visibility, preview visibility).
+    pub layout_mode: LayoutMode,
     /// Blank rows inserted between sidebar entries.
     pub sidebar_row_spacing: u8,
     /// Show Nerd Font type icons next to directory/file names.
     pub show_icons: bool,
+    /// File list rendering: a row-per-entry table, or an icon grid.
+    pub view_mode: ViewMode,
 }
 
 impl Default for UiConfig {
@@ -106,9 +188,10 @@ impl Default for UiConfig {
             sort_reverse:        false,
             sidebar_width_pct:   18,
             preview_width_pct:   36,
-            sidebar_position:    SidebarPosition::Left,
+            layout_mode:         LayoutMode::Left,
             sidebar_row_spacing: 1,
             show_icons:          true,
+            view_mode:           ViewMode::List,
         }
     }
 }
@@ -253,9 +336,10 @@ sort_key            = "name"
 sort_reverse        = false
 sidebar_width_pct   = 18
 preview_width_pct   = 36
-sidebar_position    = "left"    # left | right
+layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true
+view_mode           = "list"    # list | grid
 
 [preview]
 enabled          = true

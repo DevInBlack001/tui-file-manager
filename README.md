@@ -1,14 +1,23 @@
 # fim
 
-A keyboard-driven, terminal-native file manager for Arch-based systems (Omarchy and similar), written in Rust.
+A keyboard-driven, terminal-native file manager written in Rust, built for and tested on Omarchy but not tied to it.
 
-All file copy and move operations are delegated to the [file-transfer plugin](https://github.com/DevInBlack001/omarchy-transfer-manager) (`ftctl` / `filetransferd`), so every transfer runs asynchronously and stays visible and controllable from the Quickshell Transfer Manager panel.
+## Portability
+
+- **Runs on any Linux distro.** Nothing in fim itself requires Arch, `pacman`, Omarchy, or Quickshell; every Omarchy-specific integration point degrades gracefully when it isn't present:
+  - **Theme**: reads Omarchy's live theme file when available, otherwise falls back to a built-in dark palette.
+  - **Image/video previews**: uses the Kitty graphics protocol or Sixel when the terminal supports it (detected from environment variables, or `omarchy default terminal` as an optional hint), otherwise falls back to `chafa` character art.
+  - **`install.sh`**: only uses `pacman` opportunistically to auto-install `chafa`; on a non-Arch distro it just skips that step and tells you what to install manually. `cargo`/`rustc` are the only hard requirements.
+- **Arch (and `pacman`) get more automation**, not more functionality: `install.sh`'s auto-install steps for optional tools only fire when `pacman` is present.
+- **Quickshell is never required.** fim never calls Quickshell itself; it's purely an optional piece of the Omarchy desktop that can show live transfer-job status from `ftctl` in its own panel, on top of the status fim already shows in its own stats panel.
+- **Copy/move/paste requires [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager)**, a standalone daemon fim delegates to as a plain subprocess. It has no Omarchy or Quickshell dependency of its own; without it, paste is a no-op with a clear error rather than a crash.
 
 ![fim browsing its own repository, with the live Omarchy theme and a syntax-highlighted Cargo.toml preview](assets/screenshot.png)
 
 ## Features
 
-- Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. The sidebar can sit on either side, its row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
+- Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. `Tab` cycles five layout combinations (sidebar left/right/top, or hidden entirely, or the preview hidden entirely); sidebar row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
+- Six file list view modes, cycled with `v`: **list** (name/size/mtime), **compact** (name only), **detailed** (adds permissions/owner), **grid** (icon grid, no metadata), **tree** (peek a directory's children inline with `z` without leaving the current one), and **columns** (parent directory alongside the current one, ranger/Finder-style; the preview pane lists a focused subdirectory's contents).
 - Live Omarchy theme integration: colors are read from the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`) and re-applied on demand with `R`. Falls back to a built-in dark palette on any non-Omarchy system.
 - Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. `.ovpn` files always show the VPN glyph and never their content, since they commonly embed credentials.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
@@ -66,7 +75,9 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `1`-`9` | Jump to a sidebar bookmark |
 | `.` | Toggle hidden files |
 | `s` / `S` | Cycle sort key / reverse sort |
-| `Tab` | Toggle sidebar left/right |
+| `Tab` | Cycle layout (sidebar left/right/top, hidden sidebar, hidden preview) |
+| `v` | Cycle view (list, compact, detailed, grid, tree, columns) |
+| `z` | Tree view: peek/collapse the focused directory's children inline |
 | `/` | Search / filter |
 | `e` | Open in `nvim` (or `$EDITOR`) |
 | `o` | Open with `xdg-open` |
@@ -95,9 +106,10 @@ sort_key            = "name"    # name | size | mtime | type
 sort_reverse        = false
 sidebar_width_pct   = 18
 preview_width_pct   = 36
-sidebar_position    = "left"    # left | right
+layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true      # Nerd Font type icons; needs a Nerd Font in the terminal
+view_mode           = "list"    # list | compact | detailed | grid | tree | columns
 
 [preview]
 enabled          = true

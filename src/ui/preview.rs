@@ -8,9 +8,14 @@ use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::App;
+use crate::config::ViewMode;
 use crate::preview::{GlyphColor, GlyphLine, PreviewContent};
 use crate::theme::Theme;
 use crate::ui::ansi;
+
+/// Columns view only: bounded so a directory with an enormous entry count
+/// can't blow up memory or the render loop.
+const COLUMNS_CHILD_LISTING_CAP: usize = 300;
 
 pub fn render_preview(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
@@ -40,6 +45,17 @@ pub fn render_preview(frame: &mut Frame, area: Rect, app: &App) {
     if let PreviewContent::Glyph(glyph_lines) = &app.preview_content {
         render_glyph(frame, inner, glyph_lines, theme);
         return;
+    }
+
+    // Columns view: a focused directory's own contents are more useful here
+    // than just the summary counts, matching ranger/Finder-style browsers.
+    if app.config.ui.view_mode == ViewMode::Columns {
+        if let Some(entry) = app.focused_entry() {
+            if entry.is_dir {
+                frame.render_widget(Paragraph::new(child_listing_lines(&entry.path, theme)).wrap(Wrap { trim: false }), inner);
+                return;
+            }
+        }
     }
 
     let lines: Vec<Line> = match &app.preview_content {
@@ -236,6 +252,32 @@ fn glyph_color(theme: &Theme, role: GlyphColor) -> ratatui::style::Color {
         GlyphColor::Yellow => theme.yellow,
         GlyphColor::Cyan => theme.cyan,
     }
+}
+
+/// Bounded, read-only listing of a directory's immediate children, used by
+/// Columns view in place of the normal preview when the cursor is on a
+/// directory. Errors (permission denied) become a single informative line
+/// rather than a panic.
+fn child_listing_lines(path: &std::path::Path, theme: &Theme) -> Vec<Line<'static>> {
+    let read_dir = match std::fs::read_dir(path) {
+        Ok(rd) => rd,
+        Err(_) => {
+            return vec![Line::from(Span::styled(
+                "permission denied reading directory".to_string(),
+                Style::default().fg(theme.red),
+            ))]
+        }
+    };
+    let mut names: Vec<String> = read_dir
+        .take(COLUMNS_CHILD_LISTING_CAP)
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    if names.is_empty() {
+        return vec![Line::from(Span::styled("(empty directory)".to_string(), Style::default().fg(theme.muted)))];
+    }
+    names.into_iter().map(Line::from).collect()
 }
 
 fn stat_line<'a>(label: &'a str, value: &str, theme: &Theme) -> Line<'a> {

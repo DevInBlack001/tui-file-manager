@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
-use crate::config::{Config, SidebarPosition, SortKey};
+use crate::config::{Config, SortKey};
 use crate::core::bookmarks::{self, Bookmark, Bookmarks};
 use crate::core::{ClipMode, Clipboard, Entry, Job, Listing, Recents, TransferClient, TransferError};
 use crate::fs::ops::{self, OpResult};
@@ -91,6 +91,10 @@ pub struct App {
     pub listing: Listing,
     pub cursor: usize,
     pub selected: HashSet<PathBuf>,
+    /// Tree view only: the one directory (if any) whose immediate children
+    /// are peeked inline, toggled with `z`. Reset whenever the listing
+    /// reloads so it never points at a directory no longer on screen.
+    pub tree_expanded: Option<PathBuf>,
 
     pub show_hidden: bool,
     pub sort_key: SortKey,
@@ -168,6 +172,7 @@ impl App {
             listing,
             cursor: 0,
             selected: HashSet::new(),
+            tree_expanded: None,
             show_hidden,
             sort_key,
             sort_reverse,
@@ -345,6 +350,7 @@ impl App {
         self.listing = crate::core::read_dir(&self.cwd, self.show_hidden, self.sort_key, self.sort_reverse);
         self.cursor = 0;
         self.selected.clear();
+        self.tree_expanded = None;
         self.clamp_cursor();
         self.request_preview();
     }
@@ -455,11 +461,26 @@ impl App {
         self.reload_listing();
     }
 
-    fn toggle_sidebar_position(&mut self) {
-        self.config.ui.sidebar_position = match self.config.ui.sidebar_position {
-            SidebarPosition::Left => SidebarPosition::Right,
-            SidebarPosition::Right => SidebarPosition::Left,
-        };
+    fn cycle_layout_mode(&mut self) {
+        self.config.ui.layout_mode = self.config.ui.layout_mode.next();
+        self.set_status(format!("layout: {}", self.config.ui.layout_mode.label()));
+    }
+
+    fn cycle_view_mode(&mut self) {
+        self.config.ui.view_mode = self.config.ui.view_mode.next();
+        self.tree_expanded = None;
+        self.set_status(format!("view: {}", self.config.ui.view_mode.label()));
+    }
+
+    /// Tree view only: peek/collapse the focused directory's immediate
+    /// children inline, without navigating into it.
+    fn toggle_tree_expand(&mut self) {
+        let Some(entry) = self.focused_entry() else { return };
+        if !entry.is_dir {
+            return;
+        }
+        let path = entry.path.clone();
+        self.tree_expanded = if self.tree_expanded.as_ref() == Some(&path) { None } else { Some(path) };
     }
 
     // -----------------------------------------------------------------------
@@ -795,7 +816,9 @@ impl App {
                 self.navigate_to(home);
             }
             KeyCode::Char('.') => self.toggle_hidden(),
-            KeyCode::Tab => self.toggle_sidebar_position(),
+            KeyCode::Tab => self.cycle_layout_mode(),
+            KeyCode::Char('v') => self.cycle_view_mode(),
+            KeyCode::Char('z') => self.toggle_tree_expand(),
             KeyCode::Char('s') => self.cycle_sort(),
             KeyCode::Char('S') => self.toggle_sort_reverse(),
             KeyCode::Char('/') => {

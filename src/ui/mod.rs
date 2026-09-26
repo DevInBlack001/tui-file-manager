@@ -41,7 +41,9 @@ const HELP_SECTIONS: &[HelpSection] = &[
         keys: &[
             (".", "toggle hidden files"),
             ("s / S", "cycle sort key / reverse"),
-            ("Tab", "toggle sidebar left/right"),
+            ("Tab", "cycle layout (sidebar left/right/top, hidden)"),
+            ("v", "cycle view (list/compact/detailed/grid/tree/columns)"),
+            ("z", "tree view: peek/collapse focused directory"),
             ("R, F5", "refresh listing + theme"),
             ("?", "toggle this help"),
         ],
@@ -86,15 +88,19 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         area,
         app.config.ui.sidebar_width_pct,
         app.config.ui.preview_width_pct,
-        app.config.ui.sidebar_position,
+        app.config.ui.layout_mode,
     );
 
     app.preview_area = panes.preview;
 
-    sidebar::render(frame, panes.sidebar, app);
+    if panes.sidebar.width > 0 && panes.sidebar.height > 0 {
+        sidebar::render(frame, panes.sidebar, app);
+    }
     filelist::render(frame, panes.filelist, app);
-    preview::render_preview(frame, panes.preview, app);
-    preview::render_stats(frame, panes.stats, app);
+    if panes.preview.width > 0 && panes.preview.height > 0 {
+        preview::render_preview(frame, panes.preview, app);
+        preview::render_stats(frame, panes.stats, app);
+    }
     statusbar::render(frame, panes.status, app);
 
     if matches!(app.mode, Mode::Help) {
