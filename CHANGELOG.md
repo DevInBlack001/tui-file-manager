@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-09-26
+
+### Fixed
+
+- `Cargo.lock` is now committed (it was gitignored). It's required in the release tarball for the AUR PKGBUILD's `cargo fetch --locked` / `cargo build --frozen`, which is what makes the packaged build reproducible.
+
 ## [0.3.0] - 2026-09-26
 
 ### Added

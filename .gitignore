@@ -1,6 +1,8 @@
 # Rust build artifacts
 /target/
-Cargo.lock
+# Cargo.lock is committed deliberately: fim is a binary, and the AUR
+# PKGBUILD's `cargo fetch --locked` / `cargo build --frozen` need it present
+# in the release tarball for a reproducible build.
 
 # Config overrides (user-local, never committed)
 config.local.toml
