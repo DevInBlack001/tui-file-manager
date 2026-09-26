@@ -14,7 +14,7 @@ fim targets **Arch Linux and its derivatives** (Omarchy, EndeavourOS, Manjaro, C
 - **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager), a standalone daemon with no Omarchy or Quickshell dependency of its own (it needs only `python3`, `rsync`, and `systemd --user`) - fim delegates to it as a plain subprocess. Without it, paste is a no-op with a clear error rather than a crash.
 - **XDG desktop entry / "Open With" app picker**: standard XDG mechanisms (`.desktop` files, `$XDG_DATA_DIRS`), not Omarchy-specific at all.
 
-![fim browsing its own repository, with the live Omarchy theme and a syntax-highlighted Cargo.toml preview](assets/screenshot.png)
+![fim browsing its own repository: sidebar with a real mounted device in the DEVICES section, Nerd Font type icons, live Omarchy theme, and the preview + stats panel](assets/screenshot.png)
 
 ## Features
 
