@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.5] - 2026-09-26
+
+### Added
+
+- Send the selected entries (or the focused one) directly to a remote host over SSH (`u`), using `ftctl`'s new rsync-style `[user@]host:/path` destination spec. fim forwards the typed spec verbatim; authentication and host trust are handled entirely by the system's own SSH.
+
+### Fixed
+
+- The `ftctl`/`filetransferd` project was renamed from `omarchy-transfer-manager` to `arch-transfer-manager`. Updated every reference in README.md and install.sh, plus a stale, already-dead `filetransferd` URL in `transfer.rs`'s "ftctl not found" error message that predated this rename.
+
 ## [0.3.4] - 2026-09-26
 
 ### Added

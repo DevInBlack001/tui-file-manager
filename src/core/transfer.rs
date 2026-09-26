@@ -143,7 +143,7 @@ impl TransferClient {
                 return Err(TransferError::NotFound {
                     install_hint:
                         "ftctl not found. Install the file-transfer plugin: \
-                         see https://github.com/DevInBlack001/filetransferd"
+                         see https://github.com/DevInBlack001/arch-transfer-manager"
                             .to_string(),
                 });
             }

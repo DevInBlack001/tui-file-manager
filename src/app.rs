@@ -47,6 +47,7 @@ pub enum PromptKind {
     SymlinkTarget,
     SymlinkName,
     OpenWith,
+    SendRemote,
 }
 
 impl PromptKind {
@@ -58,6 +59,7 @@ impl PromptKind {
             PromptKind::SymlinkTarget => "symlink target",
             PromptKind::SymlinkName => "symlink name",
             PromptKind::OpenWith => "open with",
+            PromptKind::SendRemote => "send to (user@host:/path)",
         }
     }
 }
@@ -644,6 +646,28 @@ impl App {
         }
     }
 
+    /// `u`: send the selected entries (or the focused one) directly to a
+    /// remote host over SSH, via `ftctl`'s `[user@]host:/path` rsync-style
+    /// destination spec. fim never validates the spec itself; the daemon
+    /// resolves it exactly as its own README documents, and auth/host trust
+    /// stay entirely the system's own SSH.
+    fn send_to_remote(&mut self, spec: &str) {
+        let spec = spec.trim();
+        if spec.is_empty() {
+            return;
+        }
+        let paths = self.selection_or_cursor();
+        if paths.is_empty() {
+            self.set_error("nothing selected to send".to_string());
+            return;
+        }
+        let n = paths.len();
+        match self.transfer.enqueue("copy", &paths, Path::new(spec)) {
+            Ok(id) => self.set_status(format!("queued send of {n} item(s) to {spec} (job {id})")),
+            Err(e) => self.set_error(describe_transfer_error(&e)),
+        }
+    }
+
     fn show_clipboard(&mut self) {
         if self.clipboard.is_empty() {
             self.set_status("clipboard is empty".to_string());
@@ -747,6 +771,7 @@ impl App {
                 self.reload_listing();
             }
             PromptKind::OpenWith => self.open_with(&input),
+            PromptKind::SendRemote => self.send_to_remote(&input),
         }
         self.mode = Mode::Normal;
     }
@@ -1008,6 +1033,7 @@ impl App {
             KeyCode::Char('c') => self.copy_selection(),
             KeyCode::Char('x') => self.cut_selection(),
             KeyCode::Char('p') => self.paste_clipboard(),
+            KeyCode::Char('u') => self.mode = Mode::Prompt(PromptKind::SendRemote, String::new()),
             KeyCode::Char('P') => self.show_clipboard(),
             KeyCode::Char('d') => self.trash_selection(),
             KeyCode::Char('D') => self.begin_delete_confirm(),

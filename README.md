@@ -11,7 +11,7 @@ fim targets **Arch Linux and its derivatives**: Omarchy, EndeavourOS, Manjaro, C
 - **`install.sh`**: auto-installs `chafa` via `pacman`, present on every Arch-based system by definition.
 - **Auto-installing `nvim`** (`e` when it's missing) runs `pacman -S neovim` directly, falling back to `$EDITOR` on decline.
 - **Quickshell** is an optional piece of the Omarchy desktop that can show live transfer-job status from `ftctl` in its own panel, alongside the status fim already shows in its own stats panel. fim's own functionality never depends on it.
-- **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager), a standalone daemon (needing only `python3`, `rsync`, and `systemd --user`) that fim delegates to as a plain subprocess.
+- **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/arch-transfer-manager), a standalone daemon (needing only `python3`, `rsync`, and `systemd --user`) that fim delegates to as a plain subprocess.
 - **XDG desktop entry / "Open With" app picker**: standard XDG mechanisms (`.desktop` files, `$XDG_DATA_DIRS`), generic across any Arch-based desktop.
 
 ![fim browsing its own repository: sidebar with a real mounted device in the DEVICES section, Nerd Font type icons, live Omarchy theme, and the preview + stats panel](assets/screenshot.png)
@@ -25,6 +25,7 @@ fim targets **Arch Linux and its derivatives**: Omarchy, EndeavourOS, Manjaro, C
 - Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. OpenVPN configs commonly embed credentials inline, so `.ovpn` files always show the VPN glyph in place of their content.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
 - Selection, clipboard (copy/cut/paste, always via `ftctl`), trash (via `trash-cli`), permanent delete with a typed confirmation, rename, mkdir, touch, and symlink creation.
+- Send selected entries directly to a remote host over SSH (`u`), using `ftctl`'s rsync-style `user@host:/path` destination spec. Authentication and host trust stay entirely with the system's own SSH.
 - Search/filter, sort by name/size/mtime/type, hidden-file toggle, and a "goto path" prompt.
 - Open the focused file in `nvim` by default (offers to install it if missing, falling back to `$EDITOR` otherwise), via `xdg-open`, or via "open with" (`O`), which offers a picker of installed applications discovered from `.desktop` MIME associations (this naturally includes Wine/Proton-wrapped apps too, since Lutris/Bottles/Heroic/Wine installers register ordinary `.desktop` entries) before falling back to a free-text command.
 - Every external tool is invoked with an explicit argument list and a resolved absolute path; nothing is ever run through a shell.
@@ -32,7 +33,7 @@ fim targets **Arch Linux and its derivatives**: Omarchy, EndeavourOS, Manjaro, C
 ## Requirements
 
 - Rust (stable, 1.80+) to build.
-- [`ftctl` / `filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager) for copy/move/paste. `install.sh` offers to install it for you.
+- [`ftctl` / `filetransferd`](https://github.com/DevInBlack001/arch-transfer-manager) for copy/move/paste. `install.sh` offers to install it for you.
 
 Optional, for richer previews (checked and reported by `install.sh`):
 
@@ -93,6 +94,7 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `a` | Select all visible |
 | `Esc` | Clear selection |
 | `c` / `x` / `p` | Copy / cut / paste (via `ftctl`) |
+| `u` | Send to a remote host over SSH (`user@host:/path`, via `ftctl`) |
 | `P` | Show clipboard contents |
 | `d` | Trash |
 | `D` | Permanent delete (typed confirmation) |

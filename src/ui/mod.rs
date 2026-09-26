@@ -65,6 +65,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
             ("a", "select all visible"),
             ("Esc", "clear selection"),
             ("c / x / p", "copy / cut / paste"),
+            ("u", "send to a remote host over SSH (user@host:/path)"),
             ("P", "show clipboard"),
         ],
     },

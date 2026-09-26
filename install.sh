@@ -119,7 +119,7 @@ check_optional trash             trash-cli
 # 5. Install the file-transfer plugin (ftctl/filetransferd) - fim delegates
 #    ALL copy/move operations to it, so without it paste is a no-op.
 # ---------------------------------------------------------------------------
-FTCTL_REPO="https://github.com/DevInBlack001/omarchy-transfer-manager.git"
+FTCTL_REPO="https://github.com/DevInBlack001/arch-transfer-manager.git"
 FTCTL_CLONE_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/tui-fm/file-transfer"
 
 resolve_ftctl() {
