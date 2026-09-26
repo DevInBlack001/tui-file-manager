@@ -66,6 +66,7 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `1`-`9` | Jump to a sidebar bookmark |
 | `.` | Toggle hidden files |
 | `s` / `S` | Cycle sort key / reverse sort |
+| `Tab` | Toggle sidebar left/right |
 | `/` | Search / filter |
 | `e` | Open in `nvim` (or `$EDITOR`) |
 | `o` | Open with `xdg-open` |

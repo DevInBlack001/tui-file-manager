@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 
-use crate::config::{Config, SortKey};
+use crate::config::{Config, SidebarPosition, SortKey};
 use crate::core::bookmarks::{self, Bookmark, Bookmarks};
 use crate::core::{ClipMode, Clipboard, Entry, Job, Listing, Recents, TransferClient, TransferError};
 use crate::fs::ops::{self, OpResult};
@@ -455,6 +455,13 @@ impl App {
         self.reload_listing();
     }
 
+    fn toggle_sidebar_position(&mut self) {
+        self.config.ui.sidebar_position = match self.config.ui.sidebar_position {
+            SidebarPosition::Left => SidebarPosition::Right,
+            SidebarPosition::Right => SidebarPosition::Left,
+        };
+    }
+
     // -----------------------------------------------------------------------
     // Selection / clipboard
     // -----------------------------------------------------------------------
@@ -788,6 +795,7 @@ impl App {
                 self.navigate_to(home);
             }
             KeyCode::Char('.') => self.toggle_hidden(),
+            KeyCode::Tab => self.toggle_sidebar_position(),
             KeyCode::Char('s') => self.cycle_sort(),
             KeyCode::Char('S') => self.toggle_sort_reverse(),
             KeyCode::Char('/') => {

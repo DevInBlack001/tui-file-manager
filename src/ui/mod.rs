@@ -41,6 +41,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
         keys: &[
             (".", "toggle hidden files"),
             ("s / S", "cycle sort key / reverse"),
+            ("Tab", "toggle sidebar left/right"),
             ("R, F5", "refresh listing + theme"),
             ("?", "toggle this help"),
         ],
