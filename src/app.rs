@@ -111,6 +111,15 @@ pub struct App {
     pub recents: Recents,
     pub bookmarks: Bookmarks,
     pub transfer: TransferClient,
+    mtp_mount_attempts: HashSet<String>,
+
+    /// Whether the sidebar (rather than the file list) currently has
+    /// keyboard focus - `b` toggles this. `1`-`9` jump directly to a
+    /// bookmark/device regardless of focus, but with more than nine
+    /// sidebar entries (easy once several devices are plugged in) the rest
+    /// are only reachable by focusing the sidebar and using `j`/`k`/`Enter`.
+    pub sidebar_focused: bool,
+    pub sidebar_cursor: usize,
 
     previewer: Previewer,
     pub preview_content: PreviewContent,
@@ -121,6 +130,7 @@ pub struct App {
     pub focused_job: Option<Job>,
     job_poll_at: Instant,
     mounts_poll_at: Instant,
+    mtp_poll_at: Instant,
 
     pub viewing_recents: bool,
     pub mode: Mode,
@@ -189,6 +199,9 @@ impl App {
             recents,
             bookmarks,
             transfer,
+            mtp_mount_attempts: HashSet::new(),
+            sidebar_focused: false,
+            sidebar_cursor: 0,
             previewer: Previewer::new(),
             preview_content: PreviewContent::Loading,
             preview_path: None,
@@ -197,6 +210,7 @@ impl App {
             focused_job: None,
             job_poll_at: Instant::now() - Duration::from_secs(3),
             mounts_poll_at: Instant::now(),
+            mtp_poll_at: Instant::now() - Duration::from_secs(5),
             viewing_recents: false,
             mode: Mode::Normal,
             pending_symlink_target: None,
@@ -259,11 +273,28 @@ impl App {
     /// seconds - a plain `/proc/self/mounts` read is cheap, but there's no
     /// reason to redo it every frame.
     pub fn maybe_poll_mounts(&mut self) {
+        // MTP auto-mount runs on its own, slightly longer cadence: it's a
+        // real subprocess call (`gio mount -li`), not just a /proc read.
+        if self.mtp_poll_at.elapsed() >= Duration::from_secs(5) {
+            self.mtp_poll_at = Instant::now();
+            crate::core::mounts::mount_pending_mtp_devices(&mut self.mtp_mount_attempts);
+        }
+
         if self.mounts_poll_at.elapsed() < Duration::from_secs(3) {
             return;
         }
         self.mounts_poll_at = Instant::now();
         self.bookmarks.devices = crate::core::mounts::detect();
+
+        // A device disappearing (unplugged) while the sidebar cursor was on
+        // it, or past it, would otherwise leave the cursor pointing beyond
+        // the now-shorter list.
+        let len = self.flattened_bookmarks().len();
+        if len == 0 {
+            self.sidebar_cursor = 0;
+        } else if self.sidebar_cursor >= len {
+            self.sidebar_cursor = len - 1;
+        }
     }
 
     /// Poll the transfer daemon for a job touching the focused entry, at
@@ -442,6 +473,48 @@ impl App {
             self.set_error(format!("{name} does not exist"));
         } else {
             self.navigate_to(path);
+        }
+    }
+
+    /// Move the sidebar's own cursor (used while `sidebar_focused`), clamped
+    /// to the flattened list of every section/custom bookmark/device -
+    /// this is the only way to reach an entry past the ninth, since `1`-`9`
+    /// can only ever address nine slots.
+    fn move_sidebar_cursor(&mut self, delta: isize) {
+        let len = self.flattened_bookmarks().len();
+        if len == 0 {
+            return;
+        }
+        let next = self.sidebar_cursor as isize + delta;
+        self.sidebar_cursor = next.clamp(0, len as isize - 1) as usize;
+    }
+
+    /// `Enter`/`l` while the sidebar is focused: navigate to the entry under
+    /// the sidebar cursor, then return focus to the file list, matching the
+    /// "select and go" feel of `1`-`9`.
+    fn activate_sidebar_cursor(&mut self) {
+        self.jump_to_bookmark(self.sidebar_cursor);
+        self.sidebar_focused = false;
+    }
+
+    /// Index range within `flattened_bookmarks()` that belongs to
+    /// `bookmarks.devices`, since only those are ejectable.
+    fn sidebar_cursor_is_device(&self) -> bool {
+        let devices_start = self.bookmarks.sections.len() + self.bookmarks.custom.len();
+        self.sidebar_cursor >= devices_start
+    }
+
+    /// `E` while the sidebar is focused on a device: eject/unmount it.
+    fn eject_sidebar_cursor(&mut self) {
+        if !self.sidebar_cursor_is_device() {
+            self.set_status("only devices can be ejected".to_string());
+            return;
+        }
+        let target = self.flattened_bookmarks().get(self.sidebar_cursor).map(|bm| (bm.name.clone(), bm.path.clone()));
+        let Some((name, path)) = target else { return };
+        match crate::core::mounts::eject(&path) {
+            Ok(()) => self.set_status(format!("ejecting {name}...")),
+            Err(e) => self.set_error(e),
         }
     }
 
@@ -892,10 +965,23 @@ impl App {
                 self.should_quit = true;
                 return Action::Quit;
             }
-            KeyCode::Char('j') | KeyCode::Down => self.move_cursor(1),
-            KeyCode::Char('k') | KeyCode::Up => self.move_cursor(-1),
-            KeyCode::Char('l') | KeyCode::Enter => self.enter_selected(),
-            KeyCode::Char('h') | KeyCode::Backspace => self.go_parent(),
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.sidebar_focused { self.move_sidebar_cursor(1) } else { self.move_cursor(1) }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.sidebar_focused { self.move_sidebar_cursor(-1) } else { self.move_cursor(-1) }
+            }
+            KeyCode::Char('l') | KeyCode::Enter => {
+                if self.sidebar_focused { self.activate_sidebar_cursor() } else { self.enter_selected() }
+            }
+            KeyCode::Char('h') | KeyCode::Backspace => {
+                if self.sidebar_focused { self.sidebar_focused = false } else { self.go_parent() }
+            }
+            KeyCode::Char('b') => {
+                self.sidebar_focused = !self.sidebar_focused;
+                self.sidebar_cursor = 0;
+            }
+            KeyCode::Char('E') if self.sidebar_focused => self.eject_sidebar_cursor(),
             KeyCode::Char('~') => {
                 let home = self.xdg.home.clone();
                 self.navigate_to(home);
@@ -916,7 +1002,9 @@ impl App {
             KeyCode::Char('R') | KeyCode::F(5) => self.refresh(),
             KeyCode::Char(' ') => self.toggle_selection(),
             KeyCode::Char('a') => self.select_all_visible(),
-            KeyCode::Esc => self.clear_selection(),
+            KeyCode::Esc => {
+                if self.sidebar_focused { self.sidebar_focused = false } else { self.clear_selection() }
+            }
             KeyCode::Char('c') => self.copy_selection(),
             KeyCode::Char('x') => self.cut_selection(),
             KeyCode::Char('p') => self.paste_clipboard(),

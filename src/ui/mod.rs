@@ -33,6 +33,8 @@ const HELP_SECTIONS: &[HelpSection] = &[
             ("~", "go home"),
             ("g", "goto path (/ and ~ work)"),
             ("1-9", "jump to sidebar bookmark"),
+            ("b", "focus sidebar (j/k move, Enter/l select, Esc/h cancel)"),
+            ("E", "eject/unmount (sidebar focused on a device)"),
             ("/", "search / filter"),
         ],
     },

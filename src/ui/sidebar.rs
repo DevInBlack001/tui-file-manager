@@ -31,6 +31,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let style = SidebarStyle { width: inner.width, theme, show_icons: app.config.ui.show_icons };
     let mut lines: Vec<Line> = Vec::new();
     let mut idx = 1u8;
+    let mut flat_pos = 0usize;
     let mut current_line: usize = 0;
 
     let row_gap = app.config.ui.sidebar_row_spacing;
@@ -42,14 +43,16 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             !app.viewing_recents && app.cwd == bm.path
         };
-        if is_current {
+        let has_cursor = app.sidebar_focused && app.sidebar_cursor == flat_pos;
+        if is_current || has_cursor {
             current_line = lines.len();
         }
-        lines.push(bookmark_line(bm, is_current, idx, &style));
+        lines.push(bookmark_line(bm, is_current, has_cursor, idx, &style));
         for _ in 0..row_gap {
             lines.push(Line::from(""));
         }
         idx += 1;
+        flat_pos += 1;
     }
 
     if !app.bookmarks.custom.is_empty() {
@@ -57,14 +60,16 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(section_header("BOOKMARKS", inner.width, theme));
         for bm in &app.bookmarks.custom {
             let is_current = !app.viewing_recents && app.cwd == bm.path;
-            if is_current {
+            let has_cursor = app.sidebar_focused && app.sidebar_cursor == flat_pos;
+            if is_current || has_cursor {
                 current_line = lines.len();
             }
-            lines.push(bookmark_line(bm, is_current, idx, &style));
+            lines.push(bookmark_line(bm, is_current, has_cursor, idx, &style));
             for _ in 0..row_gap {
                 lines.push(Line::from(""));
             }
             idx += 1;
+            flat_pos += 1;
         }
     }
 
@@ -73,14 +78,16 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(section_header("DEVICES", inner.width, theme));
         for bm in &app.bookmarks.devices {
             let is_current = !app.viewing_recents && app.cwd == bm.path;
-            if is_current {
+            let has_cursor = app.sidebar_focused && app.sidebar_cursor == flat_pos;
+            if is_current || has_cursor {
                 current_line = lines.len();
             }
-            lines.push(bookmark_line(bm, is_current, idx, &style));
+            lines.push(bookmark_line(bm, is_current, has_cursor, idx, &style));
             for _ in 0..row_gap {
                 lines.push(Line::from(""));
             }
             idx += 1;
+            flat_pos += 1;
         }
     }
 
@@ -111,7 +118,7 @@ fn section_header(title: &str, width: u16, theme: &Theme) -> Line<'static> {
     ])
 }
 
-fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, idx: u8, style: &SidebarStyle) -> Line<'a> {
+fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, has_cursor: bool, idx: u8, style: &SidebarStyle) -> Line<'a> {
     let (name, exists, width, theme) = (bm.name.as_str(), bm.exists, style.width, style.theme);
     let number = if idx <= 9 { idx.to_string() } else { " ".to_string() };
     let marker = if is_current { "\u{25b8}" } else { " " };
@@ -125,7 +132,17 @@ fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, idx: u8, style: &Sideba
         "\u{f07b} ".to_string() // fa-folder
     };
 
-    let row_bg = if is_current { Some(theme.selection_bg) } else { None };
+    // `has_cursor` (sidebar keyboard focus, from `b`+`j`/`k`) takes priority
+    // over `is_current` (cwd/mount already matches this entry) so moving the
+    // sidebar cursor is always visible even when it lands on the entry
+    // that's already open.
+    let row_bg = if has_cursor {
+        Some(theme.accent)
+    } else if is_current {
+        Some(theme.selection_bg)
+    } else {
+        None
+    };
     let with_bg = |mut s: Style| {
         if let Some(bg) = row_bg {
             s = s.bg(bg);
@@ -133,7 +150,12 @@ fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, idx: u8, style: &Sideba
         s
     };
 
-    let (name_style, number_style) = if !exists {
+    let (name_style, number_style) = if has_cursor {
+        (
+            with_bg(Style::default().fg(theme.bg).add_modifier(Modifier::BOLD)),
+            with_bg(Style::default().fg(theme.bg)),
+        )
+    } else if !exists {
         (
             with_bg(Style::default().fg(theme.muted).add_modifier(Modifier::DIM)),
             with_bg(Style::default().fg(theme.muted).add_modifier(Modifier::DIM)),

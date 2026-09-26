@@ -21,7 +21,7 @@ fim targets **Arch Linux and its derivatives** (Omarchy, EndeavourOS, Manjaro, C
 - Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. `Tab` cycles five layout combinations (sidebar left/right/top, or hidden entirely, or the preview hidden entirely); sidebar row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
 - Six file list view modes, cycled with `v`: **list** (name/size/mtime), **compact** (name only), **detailed** (adds permissions/owner), **grid** (icon grid, no metadata), **tree** (peek a directory's children inline with `z` without leaving the current one), and **columns** (parent directory alongside the current one, ranger/Finder-style; the preview pane lists a focused subdirectory's contents).
 - Live theme integration, re-applied on demand with `R`: reads the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`) first, then [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json` - a generic Arch ricing convention, not Omarchy-specific) if that isn't present, then a built-in dark palette as the last resort.
-- Mounted removable and network devices appear automatically in their own sidebar section (checked every few seconds): USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs) - detected by reading `/proc/self/mounts` directly, so it works no matter what mounted it (an automount daemon, `gvfs`, or a manual `mount`/`/etc/fstab` entry).
+- Mounted removable and network devices appear automatically in their own sidebar section (checked every few seconds): USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs) - detected by reading `/proc/self/mounts` directly, so it works no matter what mounted it (an automount daemon, `gvfs`, or a manual `mount`/`/etc/fstab` entry). A phone connected over MTP gets mounted automatically even without a full desktop session running (fim calls `gio mount` and starts `gvfsd-fuse` itself if nothing else has), since a minimal window-manager setup has nothing else to trigger that the way GNOME Files normally would. Press `b` to focus the sidebar and browse past the ninth entry (`1`-`9` only reach the first nine); `E` ejects/unmounts the focused device.
 - Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. `.ovpn` files always show the VPN glyph and never their content, since they commonly embed credentials.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
 - Selection, clipboard (copy/cut/paste, always via `ftctl`), trash (via `trash-cli`), permanent delete with a typed confirmation, rename, mkdir, touch, and symlink creation.
@@ -41,6 +41,7 @@ Optional, for richer previews (checked and reported by `install.sh`):
 - `bat` for syntax-highlighted text previews.
 - `trash-cli` for the trash (`d`) action.
 - A [Nerd Font](https://www.nerdfonts.com/) in your terminal for the type icons (`show_icons = false` in config disables them on any other font).
+- `gvfs` and `gvfs-mtp` for phones connected over MTP to appear in the sidebar's DEVICES section. USB drives and network mounts (NFS/CIFS/sshfs) need nothing extra - they're read straight from `/proc/self/mounts`.
 
 ## Installation
 
@@ -76,6 +77,8 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `~` | Go home |
 | `g` | Goto path (supports `/` for root, `~` for home) |
 | `1`-`9` | Jump to a sidebar bookmark |
+| `b` | Focus the sidebar (`j`/`k` move, `Enter`/`l` select, `Esc`/`h` cancel) - needed past the ninth entry, which `1`-`9` can't address |
+| `E` | Eject/unmount (sidebar focused on a device) |
 | `.` | Toggle hidden files |
 | `s` / `S` | Cycle sort key / reverse sort |
 | `Tab` | Cycle layout (sidebar left/right/top, hidden sidebar, hidden preview) |

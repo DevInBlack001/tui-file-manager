@@ -4,11 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.3.3] - 2026-09-26
+## [0.3.4] - 2026-09-26
 
 ### Added
 
-- Mounted removable and network devices now appear automatically in a "DEVICES" sidebar section, checked every 3 seconds: USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs). Detected by reading `/proc/self/mounts` directly (no udisks2/D-Bus dependency, no subprocess), so it works regardless of what mounted it - an automount daemon, `gvfs`, or a manual `mount`/`fstab` entry. Pseudo-filesystems (`proc`, `tmpfs`, container overlays, etc.) and the root/system mounts are excluded; `.desktop`-style `gvfs` mount names (`mtp:host=...`, `smb-share:server=...`) are decoded into readable labels with a distinct icon per kind (phone/network/USB).
+- Mounted removable and network devices now appear automatically in a "DEVICES" sidebar section, checked every 3 seconds: USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs). Detected by reading `/proc/self/mounts` directly (no udisks2/D-Bus dependency, no subprocess) plus listing `$XDG_RUNTIME_DIR/gvfs` directly for anything gvfs is bridging, so it works regardless of what mounted it - an automount daemon, `gvfs`, or a manual `mount`/`fstab` entry. Pseudo-filesystems (`proc`, `tmpfs`, container overlays, etc.) and the root/system mounts are excluded; gvfs mount names (`mtp:host=...`, `smb-share:server=...`) are decoded into readable labels with a distinct icon per kind (phone/network/USB).
+- A phone connected over MTP is mounted automatically, even on a minimal window-manager session with no Nautilus/GNOME Files running to trigger it: fim calls `gio mount` for any MTP volume gvfs has detected but not mounted, and starts `gvfsd-fuse` itself if it isn't already running (this is what actually bridges a gvfs mount to a real filesystem path - without it, `gio mount` succeeds at the D-Bus level but no path ever appears for fim, or anything else, to browse).
+- The sidebar can now be focused (`b`) and navigated with `j`/`k`/`Enter` independently of the file list, since `1`-`9` can only ever address the first nine entries - easy to run past with several devices plugged in. `E` ejects/unmounts the device under the sidebar cursor.
+
+### Fixed
+
+- gvfs mounts (MTP phones, `gio mount`-connected network shares) were being matched against the *bridge's own* kernel mountpoint (`$XDG_RUNTIME_DIR/gvfs`, filesystem type `fuse.gvfsd-fuse`) rather than the individual device, because `gvfsd-fuse` exposes every device it manages as a plain subdirectory *inside* that one mountpoint instead of giving each its own `/proc/self/mounts` entry. A real phone showed up in the sidebar as a device literally named "gvfs" instead of the phone's own name. Fixed by listing `$XDG_RUNTIME_DIR/gvfs`'s contents directly instead of relying on `/proc/self/mounts` for anything gvfs-backed.
 
 ## [0.3.2] - 2026-09-26
 
