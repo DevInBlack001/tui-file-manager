@@ -8,24 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Mounted removable and network devices now appear automatically in a "DEVICES" sidebar section, checked every 3 seconds: USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs). Detected by reading `/proc/self/mounts` directly (no udisks2/D-Bus dependency, no subprocess) plus listing `$XDG_RUNTIME_DIR/gvfs` directly for anything gvfs is bridging, so it works regardless of what mounted it - an automount daemon, `gvfs`, or a manual `mount`/`fstab` entry. Pseudo-filesystems (`proc`, `tmpfs`, container overlays, etc.) and the root/system mounts are excluded; gvfs mount names (`mtp:host=...`, `smb-share:server=...`) are decoded into readable labels with a distinct icon per kind (phone/network/USB).
-- A phone connected over MTP is mounted automatically, even on a minimal window-manager session with no Nautilus/GNOME Files running to trigger it: fim calls `gio mount` for any MTP volume gvfs has detected but not mounted, and starts `gvfsd-fuse` itself if it isn't already running (this is what actually bridges a gvfs mount to a real filesystem path - without it, `gio mount` succeeds at the D-Bus level but no path ever appears for fim, or anything else, to browse).
-- The sidebar can now be focused (`b`) and navigated with `j`/`k`/`Enter` independently of the file list, since `1`-`9` can only ever address the first nine entries - easy to run past with several devices plugged in. `E` ejects/unmounts the device under the sidebar cursor.
+- Mounted removable and network devices now appear automatically in a "DEVICES" sidebar section, checked every 3 seconds: USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs). Detected by reading `/proc/self/mounts` directly, plus listing `$XDG_RUNTIME_DIR/gvfs` for anything gvfs is bridging, covering an automount daemon, `gvfs`, or a manual `mount`/`fstab` entry equally. Pseudo-filesystems (`proc`, `tmpfs`, container overlays, etc.) and the root/system mounts are excluded; gvfs mount names (`mtp:host=...`, `smb-share:server=...`) are decoded into readable labels with a distinct icon per kind (phone/network/USB).
+- A phone connected over MTP is mounted automatically. On a minimal window-manager session with no Nautilus/GNOME Files running, fim calls `gio mount` for any MTP volume gvfs has detected but left unmounted, and starts `gvfsd-fuse` itself if it isn't already running (the daemon that actually bridges a gvfs mount to a real filesystem path).
+- The sidebar can now be focused (`b`) and navigated with `j`/`k`/`Enter` independently of the file list. `1`-`9` addresses only the first nine entries; this covers the rest once several devices are plugged in. `E` ejects/unmounts the device under the sidebar cursor.
 
 ### Fixed
 
-- gvfs mounts (MTP phones, `gio mount`-connected network shares) were being matched against the *bridge's own* kernel mountpoint (`$XDG_RUNTIME_DIR/gvfs`, filesystem type `fuse.gvfsd-fuse`) rather than the individual device, because `gvfsd-fuse` exposes every device it manages as a plain subdirectory *inside* that one mountpoint instead of giving each its own `/proc/self/mounts` entry. A real phone showed up in the sidebar as a device literally named "gvfs" instead of the phone's own name. Fixed by listing `$XDG_RUNTIME_DIR/gvfs`'s contents directly instead of relying on `/proc/self/mounts` for anything gvfs-backed.
+- gvfs mounts (MTP phones, `gio mount`-connected network shares) were being matched against the bridge's own kernel mountpoint (`$XDG_RUNTIME_DIR/gvfs`, filesystem type `fuse.gvfsd-fuse`), the only part of a gvfs mount that gets its own `/proc/self/mounts` entry. `gvfsd-fuse` exposes every device it manages as a plain subdirectory inside that one mountpoint. A real phone showed up in the sidebar as a device literally named "gvfs". Fixed by listing `$XDG_RUNTIME_DIR/gvfs`'s contents directly for anything gvfs-backed.
 
 ## [0.3.2] - 2026-09-26
 
 ### Added
 
-- Theme auto-detection now tries [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`) between Omarchy's live theme and the built-in fallback palette. pywal is a common Arch Linux ricing convention with no tie to Omarchy or any particular desktop environment, so a non-Omarchy Arch system with it set up now gets a real live theme instead of only ever seeing the static default.
-- Project scope is now explicitly Arch Linux and its derivatives (not "any Linux distro"). Within that scope, the nvim auto-install (`pacman -S neovim`) and chafa auto-install (`install.sh`) are both fine as unconditional `pacman` calls, since every supported system has `pacman` by definition.
+- Theme auto-detection now tries [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`) between Omarchy's live theme and the built-in fallback palette. pywal is a common Arch Linux ricing convention, independent of Omarchy or any particular desktop environment, so a non-Omarchy Arch system with it set up now gets a real live theme.
+- Project scope is now explicitly Arch Linux and its derivatives. `pacman` is guaranteed on every supported system, so the nvim auto-install (`pacman -S neovim`) and chafa auto-install (`install.sh`) are both fine as unconditional `pacman` calls.
 
 ### Fixed
 
-- `aether::load_from_file` (the Omarchy/pywal TOML theme parser) returned `Ok` full of nothing but hardcoded default colors for a file with none of the recognized color keys at all - e.g. an Omarchy `shell.toml` that only holds font settings on some installs. Theme auto-detection's candidate chain treated that as "a real theme was found" and never tried the next candidate, silently swallowing the new pywal tier (and meaning the fallback palette was already being reached this way before pywal existed, just with no visible difference). It now requires at least one recognized key before accepting a file as a theme source.
+- `aether::load_from_file` (the Omarchy/pywal TOML theme parser) returned `Ok` full of hardcoded default colors for a file with none of the recognized color keys at all, e.g. an Omarchy `shell.toml` that only holds font settings on some installs. Theme auto-detection's candidate chain treated that as a real theme found and stopped there, silently swallowing the new pywal tier. It now requires at least one recognized key before accepting a file as a theme source.
 
 ## [0.3.1] - 2026-09-26
 
@@ -37,21 +37,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- `Tab` now cycles five layout combinations instead of just left/right: sidebar left, sidebar right, sidebar top (spanning the width, filelist/preview below it), sidebar hidden, and preview hidden. Config key renamed `ui.sidebar_position` -> `ui.layout_mode` (`left | right | top | no_sidebar | no_preview`).
-- Five more file list view modes alongside the original table, cycled with `v` (`ui.view_mode`): **compact** (name only), **detailed** (adds permissions/owner columns), **grid** (icon grid, no metadata), **tree** (`z` peeks a directory's immediate children inline without navigating into it), and **columns** (parent directory alongside the current one; the preview pane lists a focused subdirectory's contents instead of just a summary, ranger/Finder-style).
-- "Open with" (`O`) now offers a picker of installed applications discovered from `.desktop` `MimeType=` associations that claim to handle the focused file's type, before falling back to (`/`) a free-text command. This surfaces Wine/Proton-wrapped apps for free, since Lutris/Bottles/Heroic/Wine installers already register ordinary `.desktop` entries.
+- `Tab` now cycles five layout combinations: sidebar left, sidebar right, sidebar top (spanning the width, filelist/preview below it), sidebar hidden, and preview hidden. Config key renamed `ui.sidebar_position` -> `ui.layout_mode` (`left | right | top | no_sidebar | no_preview`).
+- Five more file list view modes alongside the original table, cycled with `v` (`ui.view_mode`): **compact** (name only), **detailed** (adds permissions/owner columns), **grid** (icon grid, no metadata), **tree** (`z` peeks a directory's immediate children inline), and **columns** (parent directory alongside the current one; the preview pane lists a focused subdirectory's contents, ranger/Finder-style).
+- "Open with" (`O`) now offers a picker of installed applications discovered from `.desktop` `MimeType=` associations that claim to handle the focused file's type, with `/` as a free-text command fallback. This surfaces Wine/Proton-wrapped apps for free, since Lutris/Bottles/Heroic/Wine installers already register ordinary `.desktop` entries.
 
 ### Fixed
 
 - The sidebar now auto-scrolls its highlighted entry into view. `LayoutMode::Top`'s shorter sidebar could otherwise leave later bookmarks permanently off-screen with no way to reach them.
-- Tree view's peeked children now use `theme.cyan` instead of `theme.blue` + the `DIM` modifier: `blue` resolves to the same RGB as `accent` (already used for borders) in both shipped themes, so the previous choice read as low-contrast/blended with the border rather than as a distinct color.
+- Tree view's peeked children now use `theme.cyan` in place of `theme.blue` + the `DIM` modifier. `blue` resolves to the same RGB as `accent` (already used for borders) in both shipped themes, so the previous choice read as low-contrast, blending into the border.
 
 ## [0.2.0] - 2026-09-26
 
 ### Added
 
 - `install.sh` writes a standard XDG desktop entry (`~/.local/share/applications/fim.desktop`) so fim shows up in app launchers and menus, including Omarchy's own app search; `uninstall.sh` removes it.
-- Nerd Font type icons for directories and files in the file list and sidebar, toggled with `ui.show_icons`. Codepoints were verified against a real installed font's cmap rather than assumed from memory.
+- Nerd Font type icons for directories and files in the file list and sidebar, toggled with `ui.show_icons`. Codepoints were verified against a real installed font's cmap.
 - Configurable sidebar row spacing (`ui.sidebar_row_spacing`) and sidebar position (`ui.sidebar_position`, `left` or `right`).
 - PKGBUILD and `.SRCINFO` for AUR packaging as `tui-file-manager`.
 

@@ -1,18 +1,18 @@
 # fim
 
-A keyboard-driven, terminal-native file manager written in Rust for Arch Linux and its derivatives - built for and tested on Omarchy, but not tied to it.
+A keyboard-driven, terminal-native file manager written in Rust, built for and tested on Omarchy.
 
 ## Portability
 
-fim targets **Arch Linux and its derivatives** (Omarchy, EndeavourOS, Manjaro, CachyOS, vanilla Arch, etc.) - not other distros. Within that scope, almost nothing is actually tied to Omarchy specifically:
+fim targets **Arch Linux and its derivatives**: Omarchy, EndeavourOS, Manjaro, CachyOS, vanilla Arch, and similar. Almost every integration point works generically across that whole family, with Omarchy support layered on top:
 
-- **Theme**: tries, in order, Omarchy's live theme file, then [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`) - a ricing convention used across Arch generally, with no tie to Omarchy or any particular desktop environment - then a built-in dark palette. A non-Omarchy Arch system with pywal set up still gets a real live theme, not just the static default.
-- **Image/video previews**: uses the Kitty graphics protocol or Sixel purely based on what the terminal supports (detected from environment variables, or `omarchy default terminal` as an optional hint when those are inconclusive), falling back to `chafa` character art on any other terminal. This was never Omarchy-gated in the first place - it's terminal-capability detection.
-- **`install.sh`**: auto-installs `chafa` via `pacman`, which every Arch-based system has by definition.
-- **Auto-installing `nvim`** (`e` when it's missing) runs `pacman -S neovim` directly, since `pacman` is guaranteed on every supported system; declining falls back to `$EDITOR`.
-- **Quickshell is never required.** fim never calls Quickshell itself; it's purely an optional piece of the Omarchy desktop that can show live transfer-job status from `ftctl` in its own panel, on top of the status fim already shows in its own stats panel.
-- **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager), a standalone daemon with no Omarchy or Quickshell dependency of its own (it needs only `python3`, `rsync`, and `systemd --user`) - fim delegates to it as a plain subprocess. Without it, paste is a no-op with a clear error rather than a crash.
-- **XDG desktop entry / "Open With" app picker**: standard XDG mechanisms (`.desktop` files, `$XDG_DATA_DIRS`), not Omarchy-specific at all.
+- **Theme**: tries, in order, Omarchy's live theme file, then [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`, a ricing convention used across Arch generally), then a built-in dark palette.
+- **Image/video previews**: uses the Kitty graphics protocol or Sixel purely based on terminal capability (detected from environment variables, with `omarchy default terminal` as an optional hint when those are inconclusive), falling back to `chafa` character art on any other terminal.
+- **`install.sh`**: auto-installs `chafa` via `pacman`, present on every Arch-based system by definition.
+- **Auto-installing `nvim`** (`e` when it's missing) runs `pacman -S neovim` directly, falling back to `$EDITOR` on decline.
+- **Quickshell** is an optional piece of the Omarchy desktop that can show live transfer-job status from `ftctl` in its own panel, alongside the status fim already shows in its own stats panel. fim's own functionality never depends on it.
+- **Copy/move/paste** goes through [`ftctl`/`filetransferd`](https://github.com/DevInBlack001/omarchy-transfer-manager), a standalone daemon (needing only `python3`, `rsync`, and `systemd --user`) that fim delegates to as a plain subprocess.
+- **XDG desktop entry / "Open With" app picker**: standard XDG mechanisms (`.desktop` files, `$XDG_DATA_DIRS`), generic across any Arch-based desktop.
 
 ![fim browsing its own repository: sidebar with a real mounted device in the DEVICES section, Nerd Font type icons, live Omarchy theme, and the preview + stats panel](assets/screenshot.png)
 
@@ -20,9 +20,9 @@ fim targets **Arch Linux and its derivatives** (Omarchy, EndeavourOS, Manjaro, C
 
 - Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. `Tab` cycles five layout combinations (sidebar left/right/top, or hidden entirely, or the preview hidden entirely); sidebar row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
 - Six file list view modes, cycled with `v`: **list** (name/size/mtime), **compact** (name only), **detailed** (adds permissions/owner), **grid** (icon grid, no metadata), **tree** (peek a directory's children inline with `z` without leaving the current one), and **columns** (parent directory alongside the current one, ranger/Finder-style; the preview pane lists a focused subdirectory's contents).
-- Live theme integration, re-applied on demand with `R`: reads the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`) first, then [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json` - a generic Arch ricing convention, not Omarchy-specific) if that isn't present, then a built-in dark palette as the last resort.
-- Mounted removable and network devices appear automatically in their own sidebar section (checked every few seconds): USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs) - detected by reading `/proc/self/mounts` directly, so it works no matter what mounted it (an automount daemon, `gvfs`, or a manual `mount`/`/etc/fstab` entry). A phone connected over MTP gets mounted automatically even without a full desktop session running (fim calls `gio mount` and starts `gvfsd-fuse` itself if nothing else has), since a minimal window-manager setup has nothing else to trigger that the way GNOME Files normally would. Press `b` to focus the sidebar and browse past the ninth entry (`1`-`9` only reach the first nine); `E` ejects/unmounts the focused device.
-- Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. `.ovpn` files always show the VPN glyph and never their content, since they commonly embed credentials.
+- Live theme integration, re-applied on demand with `R`: reads the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`), falling back through [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`, a generic Arch ricing convention) and finally a built-in dark palette.
+- Mounted removable and network devices appear automatically in their own sidebar section (checked every few seconds): USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs), detected by reading `/proc/self/mounts` directly and covering any automount daemon, `gvfs`, or manual `mount`/`/etc/fstab` entry. A phone connected over MTP gets mounted automatically: fim calls `gio mount` and starts `gvfsd-fuse` itself on a minimal window-manager session with no GNOME Files running to do it for you. `b` focuses the sidebar for `j`/`k`/`Enter` navigation past the ninth entry (`1`-`9` reach only the first nine); `E` ejects/unmounts the focused device.
+- Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. OpenVPN configs commonly embed credentials inline, so `.ovpn` files always show the VPN glyph in place of their content.
 - Full file stats panel: size, MIME type, permissions, owner, timestamps, inode, link count, symlink target, and live transfer-job status when a file is queued in `ftctl`.
 - Selection, clipboard (copy/cut/paste, always via `ftctl`), trash (via `trash-cli`), permanent delete with a typed confirmation, rename, mkdir, touch, and symlink creation.
 - Search/filter, sort by name/size/mtime/type, hidden-file toggle, and a "goto path" prompt.
@@ -143,7 +143,7 @@ All paths accept `~/` or `$HOME/` prefixes; nothing is ever hardcoded to a speci
 ## Security
 
 - No copy/move ever happens in-process; every transfer goes through `ftctl` with an explicit argument list.
-- Sensitive stat operations use `symlink_metadata` so symlinks are never silently followed, and symlink sources are validated against `$HOME` before being handed to `ftctl`.
+- Sensitive stat operations use `symlink_metadata`, which reports on the symlink itself, and symlink sources are validated against `$HOME` before being handed to `ftctl`.
 - All preview and config reads are size-capped, and no external tool is ever invoked through a shell or a bare, `$PATH`-searched name.
 - No subprocess fim spawns is ever allowed to query the terminal directly; see [TERMINAL_GRAPHICS.md](TERMINAL_GRAPHICS.md) for why that specific class of bug matters here.
 
