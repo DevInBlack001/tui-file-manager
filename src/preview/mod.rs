@@ -157,6 +157,26 @@ const TORRENT_EXTENSIONS: &[&str] = &["torrent"];
 // shown; a glyph replaces it unconditionally.
 const VPN_EXTENSIONS: &[&str] = &["ovpn"];
 
+/// Detects an SSH/TLS key file by content rather than extension or filename,
+/// since SSH keys conventionally have no extension at all (`id_rsa`,
+/// `id_ed25519`). Covers both private keys (PEM `-----BEGIN ... PRIVATE
+/// KEY-----`) and public keys (`ssh-ed25519 AAAA...`, `ecdsa-sha2-...`): a
+/// public key's comment field commonly carries a username and hostname, so
+/// its content is treated the same way. A bounded read of the first line
+/// only: real key files are always well over this size, so a plain text
+/// file that happens to start the same way and is otherwise empty has no
+/// real content for the false-positive case here to leak.
+fn is_ssh_key_file(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else { return false };
+    let mut buf = [0u8; 64];
+    let Ok(n) = file.read(&mut buf) else { return false };
+    let head = String::from_utf8_lossy(&buf[..n]);
+    (head.starts_with("-----BEGIN ") && head.contains("PRIVATE KEY"))
+        || head.starts_with("ssh-")
+        || head.starts_with("ecdsa-sha2-")
+}
+
 // OpenDocument and Microsoft Office document formats. These are zip
 // containers under the hood, but showing them as a generic "ARCHIVE" glyph
 // (or a hex dump, since mime_guess doesn't always resolve them to something
@@ -199,6 +219,9 @@ fn render_preview(
     }
     if VPN_EXTENSIONS.contains(&ext.as_str()) {
         return PreviewContent::Glyph(glyph::vpn());
+    }
+    if is_ssh_key_file(path) {
+        return PreviewContent::Glyph(glyph::ssh_key());
     }
 
     let mime = crate::fs::mime::detect(path);

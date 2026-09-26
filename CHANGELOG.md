@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.6] - 2026-09-26
+
+### Fixed
+
+- SSH private key content (`id_rsa`, `id_ed25519`, and similar files with no extension) was shown in plain text preview. Now detected by content and replaced with an "SSH KEY" glyph. Public keys (`.pub`) get the same glyph, since their comment field commonly carries a username and hostname.
+- README screenshot was visibly soft. `grim -g`'s geometry crop interacted badly with this display's 1.25x fractional scaling; capturing the full native output and cropping by physical pixel coordinates afterward fixed it.
+
 ## [0.3.5] - 2026-09-26
 
 ### Added

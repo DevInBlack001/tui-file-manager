@@ -75,6 +75,22 @@ pub fn vpn() -> Vec<GlyphLine> {
     ]
 }
 
+/// Block-letter "KEY", for SSH/TLS private and public key files. A public
+/// key's comment field commonly carries a username and hostname, so its
+/// content is never shown either, same as a private key.
+pub fn ssh_key() -> Vec<GlyphLine> {
+    use GlyphColor::*;
+    vec![
+        line(&[(" _  __ ", Yellow), (" _____ ", Accent), ("__   __", Cyan)]),
+        line(&[("| |/ / ", Yellow), ("| ____|", Accent), ("\\ \\ / /", Cyan)]),
+        line(&[("| ' /  ", Yellow), ("|  _|  ", Accent), (" \\ V / ", Cyan)]),
+        line(&[("| . \\  ", Yellow), ("| |___ ", Accent), ("  | |  ", Cyan)]),
+        line(&[("|_|\\_\\ ", Yellow), ("|_____|", Accent), ("  |_|  ", Cyan)]),
+        line(&[("", Fg)]),
+        line(&[("        SSH KEY", Muted)]),
+    ]
+}
+
 /// Block-letter "P2P", for `.torrent` files.
 pub fn torrent() -> Vec<GlyphLine> {
     use GlyphColor::*;
