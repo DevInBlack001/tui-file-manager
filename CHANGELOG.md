@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.3] - 2026-09-26
+
+### Added
+
+- Mounted removable and network devices now appear automatically in a "DEVICES" sidebar section, checked every 3 seconds: USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs). Detected by reading `/proc/self/mounts` directly (no udisks2/D-Bus dependency, no subprocess), so it works regardless of what mounted it - an automount daemon, `gvfs`, or a manual `mount`/`fstab` entry. Pseudo-filesystems (`proc`, `tmpfs`, container overlays, etc.) and the root/system mounts are excluded; `.desktop`-style `gvfs` mount names (`mtp:host=...`, `smb-share:server=...`) are decoded into readable labels with a distinct icon per kind (phone/network/USB).
+
 ## [0.3.2] - 2026-09-26
 
 ### Added

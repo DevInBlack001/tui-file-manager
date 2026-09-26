@@ -18,6 +18,9 @@ pub struct Bookmark {
     pub exists: bool,
     /// True for the special "Recents" pseudo-entry (opens the recents list).
     pub is_recents: bool,
+    /// Nerd Font glyph override for mounted devices (USB/network/phone);
+    /// `None` uses the usual folder icon.
+    pub icon: Option<&'static str>,
 }
 
 /// A user-defined bookmark read from config.toml.
@@ -35,6 +38,10 @@ pub struct Bookmarks {
     pub sections: Vec<Bookmark>,
     /// User-defined entries from config.toml [[bookmarks.custom]].
     pub custom: Vec<Bookmark>,
+    /// Currently mounted removable/network devices, refreshed periodically
+    /// by `App::maybe_poll_mounts` (see core::mounts::detect). Empty until
+    /// the first poll and whenever nothing is mounted.
+    pub devices: Vec<Bookmark>,
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +68,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
         path: xdg.home.clone(),
         exists: xdg.home.is_dir(),
         is_recents: false,
+        icon: None,
     });
 
     // Optional standard XDG directories.
@@ -80,6 +88,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
                 path: path.clone(),
                 exists,
                 is_recents: false,
+                icon: None,
             });
         }
     }
@@ -91,6 +100,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
         path: PathBuf::new(), // placeholder; app.rs handles is_recents specially
         exists: true,
         is_recents: true,
+        icon: None,
     });
 
     // User custom bookmarks.
@@ -103,6 +113,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
                 path: cb.path.clone(),
                 exists,
                 is_recents: false,
+                icon: None,
             }
         })
         .collect();
@@ -110,5 +121,6 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
     Bookmarks {
         sections,
         custom: custom_bookmarks,
+        devices: Vec::new(),
     }
 }

@@ -4,6 +4,7 @@ pub mod bookmarks;
 pub mod clipboard;
 pub mod entry;
 pub mod listing;
+pub mod mounts;
 pub mod recents;
 pub mod transfer;
 

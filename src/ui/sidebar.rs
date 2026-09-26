@@ -6,8 +6,17 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
+use crate::core::bookmarks::Bookmark;
 use crate::theme::Theme;
 use crate::app::App;
+
+/// Render settings shared by every bookmark line in one frame, bundled to
+/// keep `bookmark_line`'s argument count sane.
+struct SidebarStyle<'a> {
+    width: u16,
+    theme: &'a Theme,
+    show_icons: bool,
+}
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
@@ -19,6 +28,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    let style = SidebarStyle { width: inner.width, theme, show_icons: app.config.ui.show_icons };
     let mut lines: Vec<Line> = Vec::new();
     let mut idx = 1u8;
     let mut current_line: usize = 0;
@@ -35,7 +45,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         if is_current {
             current_line = lines.len();
         }
-        lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
+        lines.push(bookmark_line(bm, is_current, idx, &style));
         for _ in 0..row_gap {
             lines.push(Line::from(""));
         }
@@ -50,7 +60,23 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
             if is_current {
                 current_line = lines.len();
             }
-            lines.push(bookmark_line(&bm.name, bm.exists, is_current, idx, inner.width, theme, app.config.ui.show_icons));
+            lines.push(bookmark_line(bm, is_current, idx, &style));
+            for _ in 0..row_gap {
+                lines.push(Line::from(""));
+            }
+            idx += 1;
+        }
+    }
+
+    if !app.bookmarks.devices.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(section_header("DEVICES", inner.width, theme));
+        for bm in &app.bookmarks.devices {
+            let is_current = !app.viewing_recents && app.cwd == bm.path;
+            if is_current {
+                current_line = lines.len();
+            }
+            lines.push(bookmark_line(bm, is_current, idx, &style));
             for _ in 0..row_gap {
                 lines.push(Line::from(""));
             }
@@ -85,21 +111,18 @@ fn section_header(title: &str, width: u16, theme: &Theme) -> Line<'static> {
     ])
 }
 
-fn bookmark_line<'a>(
-    name: &'a str,
-    exists: bool,
-    is_current: bool,
-    idx: u8,
-    width: u16,
-    theme: &Theme,
-    show_icons: bool,
-) -> Line<'a> {
+fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, idx: u8, style: &SidebarStyle) -> Line<'a> {
+    let (name, exists, width, theme) = (bm.name.as_str(), bm.exists, style.width, style.theme);
     let number = if idx <= 9 { idx.to_string() } else { " ".to_string() };
     let marker = if is_current { "\u{25b8}" } else { " " };
-    let icon = if show_icons {
-        if is_current { "\u{f07c} " } else { "\u{f07b} " } // fa-folder_open / fa-folder
+    let icon: String = if !style.show_icons {
+        String::new()
+    } else if let Some(glyph) = bm.icon {
+        format!("{glyph} ")
+    } else if is_current {
+        "\u{f07c} ".to_string() // fa-folder_open
     } else {
-        ""
+        "\u{f07b} ".to_string() // fa-folder
     };
 
     let row_bg = if is_current { Some(theme.selection_bg) } else { None };

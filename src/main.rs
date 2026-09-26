@@ -75,6 +75,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::
     loop {
         app.poll_preview();
         app.maybe_poll_job_status();
+        app.maybe_poll_mounts();
 
         terminal.draw(|frame| ui::draw(frame, app))?;
         sync_preview_graphics(terminal, app, &mut graphics_shown)?;

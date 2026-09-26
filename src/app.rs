@@ -120,6 +120,7 @@ pub struct App {
 
     pub focused_job: Option<Job>,
     job_poll_at: Instant,
+    mounts_poll_at: Instant,
 
     pub viewing_recents: bool,
     pub mode: Mode,
@@ -155,7 +156,8 @@ impl App {
                 path: c.path.clone(),
             })
             .collect();
-        let bookmarks = bookmarks::build(&xdg, &custom);
+        let mut bookmarks = bookmarks::build(&xdg, &custom);
+        bookmarks.devices = crate::core::mounts::detect();
 
         let cwd = std::env::current_dir().unwrap_or_else(|_| xdg.home.clone());
         let show_hidden = config.ui.show_hidden;
@@ -194,6 +196,7 @@ impl App {
             focused_mime: None,
             focused_job: None,
             job_poll_at: Instant::now() - Duration::from_secs(3),
+            mounts_poll_at: Instant::now(),
             viewing_recents: false,
             mode: Mode::Normal,
             pending_symlink_target: None,
@@ -234,6 +237,7 @@ impl App {
             .sections
             .iter()
             .chain(self.bookmarks.custom.iter())
+            .chain(self.bookmarks.devices.iter())
             .collect()
     }
 
@@ -249,6 +253,17 @@ impl App {
                 self.preview_content = content;
             }
         }
+    }
+
+    /// Refresh the sidebar's mounted-devices list, at most once every 3
+    /// seconds - a plain `/proc/self/mounts` read is cheap, but there's no
+    /// reason to redo it every frame.
+    pub fn maybe_poll_mounts(&mut self) {
+        if self.mounts_poll_at.elapsed() < Duration::from_secs(3) {
+            return;
+        }
+        self.mounts_poll_at = Instant::now();
+        self.bookmarks.devices = crate::core::mounts::detect();
     }
 
     /// Poll the transfer daemon for a job touching the focused entry, at
