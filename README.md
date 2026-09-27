@@ -1,6 +1,6 @@
 # fim
 
-A keyboard-driven, terminal-native file manager written in Rust, built for and tested on Omarchy.
+A keyboard-driven, terminal-native file manager written in Rust, built for arch flavors and tested on Omarchy.
 
 ## Portability
 
