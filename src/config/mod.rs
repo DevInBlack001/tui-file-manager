@@ -24,6 +24,10 @@ pub enum LayoutMode {
     NoSidebar,
     /// preview hidden; filelist gets the extra width.
     NoPreview,
+    /// The preview pane's spot is replaced by a disk usage panel:
+    /// total/used/free with a visual bar, for every internal and external
+    /// disk currently detected.
+    Disks,
 }
 
 impl LayoutMode {
@@ -34,7 +38,8 @@ impl LayoutMode {
             LayoutMode::Right => LayoutMode::Top,
             LayoutMode::Top => LayoutMode::NoSidebar,
             LayoutMode::NoSidebar => LayoutMode::NoPreview,
-            LayoutMode::NoPreview => LayoutMode::Left,
+            LayoutMode::NoPreview => LayoutMode::Disks,
+            LayoutMode::Disks => LayoutMode::Left,
         }
     }
 
@@ -45,6 +50,7 @@ impl LayoutMode {
             LayoutMode::Top => "sidebar top",
             LayoutMode::NoSidebar => "sidebar hidden",
             LayoutMode::NoPreview => "preview hidden",
+            LayoutMode::Disks => "disks panel",
         }
     }
 }
@@ -69,9 +75,6 @@ pub enum ViewMode {
     /// Parent directory alongside the current one; the preview pane lists a
     /// focused subdirectory's contents instead of just a summary.
     Columns,
-    /// Total/used/free space for every internal and external disk, with a
-    /// visual used/free bar per disk.
-    Disks,
 }
 
 impl ViewMode {
@@ -83,8 +86,7 @@ impl ViewMode {
             ViewMode::Detailed => ViewMode::Grid,
             ViewMode::Grid => ViewMode::Tree,
             ViewMode::Tree => ViewMode::Columns,
-            ViewMode::Columns => ViewMode::Disks,
-            ViewMode::Disks => ViewMode::List,
+            ViewMode::Columns => ViewMode::List,
         }
     }
 
@@ -96,7 +98,6 @@ impl ViewMode {
             ViewMode::Grid => "grid",
             ViewMode::Tree => "tree",
             ViewMode::Columns => "columns",
-            ViewMode::Disks => "disks",
         }
     }
 }
@@ -341,10 +342,10 @@ sort_key            = "name"
 sort_reverse        = false
 sidebar_width_pct   = 18
 preview_width_pct   = 36
-layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
+layout_mode         = "left"    # left | right | top | no_sidebar | no_preview | disks
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true
-view_mode           = "list"    # list | compact | detailed | grid | tree | columns | disks
+view_mode           = "list"    # list | compact | detailed | grid | tree | columns
 
 [preview]
 enabled          = true

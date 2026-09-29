@@ -210,10 +210,10 @@ sort_key            = "name"    # name | size | mtime | type
 sort_reverse        = false
 sidebar_width_pct   = 18
 preview_width_pct   = 36
-layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
+layout_mode         = "left"    # left | right | top | no_sidebar | no_preview | disks
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true
-view_mode           = "list"    # list | compact | detailed | grid | tree | columns | disks
+view_mode           = "list"    # list | compact | detailed | grid | tree | columns
 
 [preview]
 enabled          = true

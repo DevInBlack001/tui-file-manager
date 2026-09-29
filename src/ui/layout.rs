@@ -98,6 +98,13 @@ pub fn compute(area: Rect, sidebar_pct: u8, preview_pct: u8, layout_mode: Layout
         (sidebar, filelist, preview)
     };
 
+    // Disks mode has nothing to put in the stats slot (it isn't about a
+    // focused file), so the whole preview-sized area goes to the disks
+    // panel instead of being split.
+    if layout_mode == LayoutMode::Disks {
+        return Panes { sidebar, filelist, preview, stats: Rect::default(), status };
+    }
+
     let (preview_top, stats) = split_preview(preview);
     Panes { sidebar, filelist, preview: preview_top, stats, status }
 }

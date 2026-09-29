@@ -2,6 +2,7 @@
 // bar, and overlays the help screen when active.
 
 pub mod ansi;
+pub mod disks;
 pub mod filelist;
 pub mod layout;
 pub mod preview;
@@ -43,8 +44,8 @@ const HELP_SECTIONS: &[HelpSection] = &[
         keys: &[
             (".", "toggle hidden files"),
             ("s / S", "cycle sort key / reverse"),
-            ("Tab", "cycle layout (sidebar left/right/top, hidden)"),
-            ("v", "cycle view (list/compact/detailed/grid/tree/columns/disks)"),
+            ("Tab", "cycle layout (sidebar left/right/top, hidden, disks panel)"),
+            ("v", "cycle view (list/compact/detailed/grid/tree/columns)"),
             ("z", "tree view: peek/collapse focused directory"),
             ("R, F5", "refresh listing + theme"),
             ("?", "toggle this help"),
@@ -101,8 +102,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
     filelist::render(frame, panes.filelist, app);
     if panes.preview.width > 0 && panes.preview.height > 0 {
-        preview::render_preview(frame, panes.preview, app);
-        preview::render_stats(frame, panes.stats, app);
+        if app.config.ui.layout_mode == crate::config::LayoutMode::Disks {
+            disks::render(frame, panes.preview, &app.theme);
+        } else {
+            preview::render_preview(frame, panes.preview, app);
+            preview::render_stats(frame, panes.stats, app);
+        }
     }
     statusbar::render(frame, panes.status, app);
 

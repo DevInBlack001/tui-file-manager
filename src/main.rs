@@ -130,7 +130,17 @@ fn sync_preview_graphics(
     app: &App,
     graphics_shown: &mut Option<(PathBuf, Rect)>,
 ) -> io::Result<()> {
-    match app.preview_graphics() {
+    // The preview pane's spot shows the disks panel instead while
+    // LayoutMode::Disks is active; a graphic cached from before switching
+    // into it must never get blitted on top, so this is treated the same
+    // as "no graphics to show" (clearing anything already drawn there).
+    let graphics = if app.config.ui.layout_mode == crate::config::LayoutMode::Disks {
+        None
+    } else {
+        app.preview_graphics()
+    };
+
+    match graphics {
         Some((path, bytes)) => {
             let area = app.preview_area;
             let already_shown = graphics_shown
