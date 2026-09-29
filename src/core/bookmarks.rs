@@ -21,6 +21,9 @@ pub struct Bookmark {
     /// Nerd Font glyph override for mounted devices (USB/network/phone);
     /// `None` uses the usual folder icon.
     pub icon: Option<&'static str>,
+    /// Used-space percentage, shown as a suffix for the sidebar's DISKS
+    /// section entries; `None` for every other kind of bookmark.
+    pub disk_percent: Option<u8>,
 }
 
 /// A user-defined bookmark read from config.toml.
@@ -42,6 +45,11 @@ pub struct Bookmarks {
     /// by `App::maybe_poll_mounts` (see core::mounts::detect). Empty until
     /// the first poll and whenever nothing is mounted.
     pub devices: Vec<Bookmark>,
+    /// Every detected disk (internal and external) with its used-space
+    /// percentage, refreshed on the same cadence as `devices` (see
+    /// core::diskspace::detect_all). Always-visible summary; `Tab` still
+    /// cycles to a separate, more detailed panel with bars and byte counts.
+    pub disks: Vec<Bookmark>,
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +77,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
         exists: xdg.home.is_dir(),
         is_recents: false,
         icon: None,
+        disk_percent: None,
     });
 
     // Optional standard XDG directories.
@@ -89,6 +98,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
                 exists,
                 is_recents: false,
                 icon: None,
+                disk_percent: None,
             });
         }
     }
@@ -101,6 +111,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
         exists: true,
         is_recents: true,
         icon: None,
+        disk_percent: None,
     });
 
     // User custom bookmarks.
@@ -114,6 +125,7 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
                 exists,
                 is_recents: false,
                 icon: None,
+                disk_percent: None,
             }
         })
         .collect();
@@ -122,5 +134,6 @@ pub fn build(xdg: &XdgDirs, custom: &[CustomBookmark]) -> Bookmarks {
         sections,
         custom: custom_bookmarks,
         devices: Vec::new(),
+        disks: Vec::new(),
     }
 }

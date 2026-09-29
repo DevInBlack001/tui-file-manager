@@ -170,6 +170,7 @@ impl App {
             .collect();
         let mut bookmarks = bookmarks::build(&xdg, &custom);
         bookmarks.devices = crate::core::mounts::detect();
+        bookmarks.disks = crate::core::diskspace::detect_all_as_bookmarks();
 
         let cwd = std::env::current_dir().unwrap_or_else(|_| xdg.home.clone());
         let show_hidden = config.ui.show_hidden;
@@ -254,6 +255,7 @@ impl App {
             .iter()
             .chain(self.bookmarks.custom.iter())
             .chain(self.bookmarks.devices.iter())
+            .chain(self.bookmarks.disks.iter())
             .collect()
     }
 
@@ -287,6 +289,7 @@ impl App {
         }
         self.mounts_poll_at = Instant::now();
         self.bookmarks.devices = crate::core::mounts::detect();
+        self.bookmarks.disks = crate::core::diskspace::detect_all_as_bookmarks();
 
         // A device disappearing (unplugged) while the sidebar cursor was on
         // it, or past it, would otherwise leave the cursor pointing beyond
@@ -503,7 +506,8 @@ impl App {
     /// `bookmarks.devices`, since only those are ejectable.
     fn sidebar_cursor_is_device(&self) -> bool {
         let devices_start = self.bookmarks.sections.len() + self.bookmarks.custom.len();
-        self.sidebar_cursor >= devices_start
+        let devices_end = devices_start + self.bookmarks.devices.len();
+        (devices_start..devices_end).contains(&self.sidebar_cursor)
     }
 
     /// `E` while the sidebar is focused on a device: eject/unmount it.

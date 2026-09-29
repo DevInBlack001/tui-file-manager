@@ -91,6 +91,24 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    if !app.bookmarks.disks.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(section_header("DISKS", inner.width, theme));
+        for bm in &app.bookmarks.disks {
+            let is_current = !app.viewing_recents && app.cwd == bm.path;
+            let has_cursor = app.sidebar_focused && app.sidebar_cursor == flat_pos;
+            if is_current || has_cursor {
+                current_line = lines.len();
+            }
+            lines.push(bookmark_line(bm, is_current, has_cursor, idx, &style));
+            for _ in 0..row_gap {
+                lines.push(Line::from(""));
+            }
+            idx += 1;
+            flat_pos += 1;
+        }
+    }
+
     // Auto-scroll: with a short sidebar (e.g. LayoutMode::Top capping it to a
     // few rows), keep the highlighted entry in view rather than silently
     // clipping the bottom of the list with no way to reach it.
@@ -170,7 +188,12 @@ fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, has_cursor: bool, idx: 
     };
     let marker_style = with_bg(Style::default().fg(if is_current { theme.accent } else { theme.bg }));
 
-    let content_len = 4 + icon.chars().count() + name.chars().count(); // "M N " + icon + name
+    // DISKS section entries carry a used-space percentage; every other
+    // bookmark kind has none, so this is a no-op for them.
+    let percent = bm.disk_percent.map(|p| format!(" {p}%"));
+    let percent_len = percent.as_ref().map_or(0, |s| s.chars().count());
+
+    let content_len = 4 + icon.chars().count() + name.chars().count() + percent_len; // "M N " + icon + name + percent
     let pad = " ".repeat((width as usize).saturating_sub(content_len));
 
     let mut spans = vec![
@@ -179,6 +202,18 @@ fn bookmark_line<'a>(bm: &'a Bookmark, is_current: bool, has_cursor: bool, idx: 
         Span::styled(icon, name_style),
         Span::styled(name, name_style),
     ];
+    if let (Some(percent), Some(p)) = (percent, bm.disk_percent) {
+        // Same green/yellow/red warning-level convention as the detailed
+        // disks panel, from Theme fields so it follows the active palette.
+        let percent_color = if p >= 90 {
+            theme.red
+        } else if p >= 75 {
+            theme.yellow
+        } else {
+            theme.green
+        };
+        spans.push(Span::styled(percent, with_bg(Style::default().fg(percent_color))));
+    }
     if is_current && !pad.is_empty() {
         spans.push(Span::styled(pad, with_bg(Style::default())));
     }

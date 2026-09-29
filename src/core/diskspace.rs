@@ -1,12 +1,15 @@
-// core/diskspace.rs - Total/used/free space per disk, for the "Disks" file
-// list view mode. Covers every real filesystem: the internal disk(s) a
-// system boots from (root, and any separate /home, /boot, or other internal
-// partition), plus whatever's currently plugged in or mounted over the
-// network - the same detection `core::mounts` already does for the
-// sidebar's DEVICES section, reused here rather than duplicated.
+// core/diskspace.rs - Total/used/free space per disk: an always-visible
+// compact summary in the sidebar's DISKS section, and a more detailed panel
+// (bars, byte counts) cycled into the preview pane's spot with Tab. Covers
+// every real filesystem: the internal disk(s) a system boots from (root,
+// and any separate /home, /boot, or other internal partition), plus
+// whatever's currently plugged in or mounted over the network - the same
+// detection `core::mounts` already does for the sidebar's DEVICES section,
+// reused here rather than duplicated.
 
 use std::path::{Path, PathBuf};
 
+use crate::core::bookmarks::Bookmark;
 use crate::core::mounts::{
     self, gvfs_children, is_conventional_mount_root, is_network_fstype, label_from_mountpoint, RealMount,
     ICON_NETWORK, ICON_USB,
@@ -36,6 +39,29 @@ impl DiskInfo {
     pub fn used_fraction(&self) -> f64 {
         if self.total == 0 { 0.0 } else { self.used as f64 / self.total as f64 }
     }
+
+    /// Used-space percentage, rounded to the nearest whole number, for the
+    /// sidebar's compact DISKS entries.
+    pub fn used_percent(&self) -> u8 {
+        (self.used_fraction() * 100.0).round().clamp(0.0, 100.0) as u8
+    }
+
+    fn to_bookmark(&self) -> Bookmark {
+        Bookmark {
+            name: self.label.clone(),
+            path: self.mountpoint.clone(),
+            exists: true,
+            is_recents: false,
+            icon: Some(self.icon),
+            disk_percent: Some(self.used_percent()),
+        }
+    }
+}
+
+/// `detect_all`'s disks, as sidebar bookmarks for the always-visible DISKS
+/// section (see `App::maybe_poll_mounts`).
+pub fn detect_all_as_bookmarks() -> Vec<Bookmark> {
+    detect_all().iter().map(DiskInfo::to_bookmark).collect()
 }
 
 /// Detect every real disk (internal and external) with its total/used/free

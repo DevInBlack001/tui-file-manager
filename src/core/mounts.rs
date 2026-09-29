@@ -195,7 +195,14 @@ fn gvfs_children_at(gvfs_dir: &std::path::Path) -> Vec<Bookmark> {
             // rather than USB, since a real removable USB disk is already
             // covered by udisks2's own /media|/run/media mount, not gvfs.
             let (name, icon) = label_from_mountpoint(&raw_name, ICON_NETWORK);
-            Some(Bookmark { name, exists: path.is_dir(), path, is_recents: false, icon: Some(icon) })
+            Some(Bookmark {
+                name,
+                exists: path.is_dir(),
+                path,
+                is_recents: false,
+                icon: Some(icon),
+                disk_percent: None,
+            })
         })
         .collect()
 }
@@ -397,6 +404,7 @@ fn parse_mounts(content: &str) -> Vec<Bookmark> {
             path,
             is_recents: false,
             icon: Some(icon),
+            disk_percent: None,
         });
     }
 
