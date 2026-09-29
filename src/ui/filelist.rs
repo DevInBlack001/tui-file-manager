@@ -54,6 +54,14 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    // Disk usage is independent of the current directory's listing (no
+    // entries to be empty, no permission error to report), so it bypasses
+    // both checks below entirely.
+    if app.config.ui.view_mode == ViewMode::Disks {
+        render_disks(frame, inner, theme);
+        return;
+    }
+
     if let Some(err) = &app.listing.error {
         let msg = describe_list_error(err);
         frame.render_widget(
@@ -80,6 +88,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         ViewMode::Grid => render_grid(frame, inner, app, theme, &entries),
         ViewMode::Tree => render_tree(frame, inner, app, theme, &entries),
         ViewMode::Columns => render_columns(frame, inner, app, theme, &entries),
+        ViewMode::Disks => unreachable!("handled above, before the entries/error checks"),
     }
 }
 
@@ -438,6 +447,80 @@ fn render_parent_column(frame: &mut Frame, area: Rect, app: &App, theme: &Theme)
         .collect();
 
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+// ---------------------------------------------------------------------------
+// Disks (total/used/free per disk, internal and external)
+// ---------------------------------------------------------------------------
+
+const DISK_CARD_HEIGHT: u16 = 4;
+
+fn render_disks(frame: &mut Frame, area: Rect, theme: &Theme) {
+    let disks = crate::core::diskspace::detect_all();
+    if disks.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "no disks detected",
+                Style::default().fg(theme.muted),
+            ))),
+            area,
+        );
+        return;
+    }
+
+    let visible = (area.height / DISK_CARD_HEIGHT).max(1) as usize;
+    let shown = disks.len().min(visible);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Length(DISK_CARD_HEIGHT); shown])
+        .split(area);
+
+    for (disk, row) in disks.iter().zip(rows.iter()) {
+        render_disk_card(frame, *row, disk, theme);
+    }
+}
+
+fn render_disk_card(frame: &mut Frame, area: Rect, disk: &crate::core::diskspace::DiskInfo, theme: &Theme) {
+    let [header, gauge_area, detail, _pad] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
+        .areas(area);
+
+    let header_line = Line::from(vec![
+        Span::styled(format!("{} ", disk.icon), Style::default().fg(theme.accent)),
+        Span::styled(disk.label.clone(), Style::default().fg(theme.fg_bright).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("  ({})", disk.fstype), Style::default().fg(theme.muted)),
+    ]);
+    frame.render_widget(Paragraph::new(header_line), header);
+
+    let fraction = disk.used_fraction().clamp(0.0, 1.0);
+    // Same warning-level convention as `df`/most disk-usage tools: green
+    // while there's plenty of room, yellow getting tight, red nearly full.
+    // Every color here is a Theme field, never a literal, so it follows
+    // whatever palette (Omarchy, pywal, or the built-in fallback) is active.
+    let bar_color = if fraction >= 0.9 {
+        theme.red
+    } else if fraction >= 0.75 {
+        theme.yellow
+    } else {
+        theme.green
+    };
+    let gauge = ratatui::widgets::Gauge::default()
+        .gauge_style(Style::default().fg(bar_color).bg(theme.bg_lighter))
+        .ratio(fraction)
+        .label(format!("{:.0}%", fraction * 100.0));
+    frame.render_widget(gauge, gauge_area);
+
+    let detail_line = Line::from(Span::styled(
+        format!(
+            "total {}   used {}   free {}",
+            crate::core::diskspace::human_bytes(disk.total),
+            crate::core::diskspace::human_bytes(disk.used),
+            crate::core::diskspace::human_bytes(disk.free),
+        ),
+        Style::default().fg(theme.muted),
+    ));
+    frame.render_widget(Paragraph::new(detail_line), detail);
 }
 
 fn describe_list_error(err: &crate::core::ListError) -> String {

@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.8] - 2026-09-29
+
+### Added
+
+- New "disks" file list view mode (`v` to cycle to it), showing total/used/free space for every internal and external disk, each with a visual used/free bar (green/yellow/red by how full it is). Multiple internal disks (root, `/boot`, or any other separate partition) each get their own entry. Several btrfs subvolumes of the same underlying disk are collapsed into a single entry, since they'd otherwise repeat identical space stats under different mountpoint names. Currently-connected external drives and network mounts get the same treatment, reusing the sidebar's existing device detection.
+- Real filesystem space comes from `statvfs(2)` via the `libc` crate (no safe `std` wrapper exists for it).
+
 ## [0.3.7] - 2026-09-26
 
 ### Fixed

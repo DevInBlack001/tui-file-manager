@@ -3,6 +3,7 @@
 pub mod bookmarks;
 pub mod clipboard;
 pub mod entry;
+pub mod diskspace;
 pub mod listing;
 pub mod mounts;
 pub mod recents;

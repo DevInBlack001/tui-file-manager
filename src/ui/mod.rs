@@ -44,7 +44,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
             (".", "toggle hidden files"),
             ("s / S", "cycle sort key / reverse"),
             ("Tab", "cycle layout (sidebar left/right/top, hidden)"),
-            ("v", "cycle view (list/compact/detailed/grid/tree/columns)"),
+            ("v", "cycle view (list/compact/detailed/grid/tree/columns/disks)"),
             ("z", "tree view: peek/collapse focused directory"),
             ("R, F5", "refresh listing + theme"),
             ("?", "toggle this help"),

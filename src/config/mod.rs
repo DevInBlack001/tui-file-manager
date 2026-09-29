@@ -69,6 +69,9 @@ pub enum ViewMode {
     /// Parent directory alongside the current one; the preview pane lists a
     /// focused subdirectory's contents instead of just a summary.
     Columns,
+    /// Total/used/free space for every internal and external disk, with a
+    /// visual used/free bar per disk.
+    Disks,
 }
 
 impl ViewMode {
@@ -80,7 +83,8 @@ impl ViewMode {
             ViewMode::Detailed => ViewMode::Grid,
             ViewMode::Grid => ViewMode::Tree,
             ViewMode::Tree => ViewMode::Columns,
-            ViewMode::Columns => ViewMode::List,
+            ViewMode::Columns => ViewMode::Disks,
+            ViewMode::Disks => ViewMode::List,
         }
     }
 
@@ -92,6 +96,7 @@ impl ViewMode {
             ViewMode::Grid => "grid",
             ViewMode::Tree => "tree",
             ViewMode::Columns => "columns",
+            ViewMode::Disks => "disks",
         }
     }
 }
@@ -339,7 +344,7 @@ preview_width_pct   = 36
 layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true
-view_mode           = "list"    # list | grid
+view_mode           = "list"    # list | compact | detailed | grid | tree | columns | disks
 
 [preview]
 enabled          = true

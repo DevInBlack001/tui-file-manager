@@ -19,7 +19,7 @@ fim targets **Arch Linux and its derivatives**: Omarchy, EndeavourOS, Manjaro, C
 ## Features
 
 - Three-pane layout: sidebar (Home, Documents, Downloads, Pictures, Videos, Work, Recents, plus user bookmarks), file list, and a combined preview + stats panel. `Tab` cycles five layout combinations (sidebar left/right/top, or hidden entirely, or the preview hidden entirely); sidebar row spacing is configurable, and Nerd Font type icons for directories and files can be toggled on or off.
-- Six file list view modes, cycled with `v`: **list** (name/size/mtime), **compact** (name only), **detailed** (adds permissions/owner), **grid** (icon grid, no metadata), **tree** (peek a directory's children inline with `z` without leaving the current one), and **columns** (parent directory alongside the current one, ranger/Finder-style; the preview pane lists a focused subdirectory's contents).
+- Seven file list view modes, cycled with `v`: **list** (name/size/mtime), **compact** (name only), **detailed** (adds permissions/owner), **grid** (icon grid, no metadata), **tree** (peek a directory's children inline with `z` without leaving the current one), **columns** (parent directory alongside the current one, ranger/Finder-style; the preview pane lists a focused subdirectory's contents), and **disks** (total/used/free space with a visual bar for every internal and external disk - multiple internal disks and currently-connected external drives all get their own entry).
 - Live theme integration, re-applied on demand with `R`: reads the currently active Omarchy theme (`$XDG_STATE_HOME/omarchy/current/theme/colors.toml`), falling back through [pywal](https://github.com/dylanaraps/pywal)'s cache (`~/.cache/wal/colors.json`, a generic Arch ricing convention) and finally a built-in dark palette.
 - Mounted removable and network devices appear automatically in their own sidebar section (checked every few seconds): USB drives, phones over MTP, and anything mounted over the network (NFS, CIFS/SMB, sshfs), detected by reading `/proc/self/mounts` directly and covering any automount daemon, `gvfs`, or manual `mount`/`/etc/fstab` entry. A phone connected over MTP gets mounted automatically: fim calls `gio mount` and starts `gvfsd-fuse` itself on a minimal window-manager session with no GNOME Files running to do it for you. `b` focuses the sidebar for `j`/`k`/`Enter` navigation past the ninth entry (`1`-`9` reach only the first nine); `E` ejects/unmounts the focused device.
 - Rich previews: syntax-highlighted text (via `bat`, with a plain-text fallback), real image/video previews via the Kitty graphics protocol or Sixel graphics (falling back to colorized character art via `chafa` on other terminals), PDF first-page text (via `pdftotext`), a built-in hex dump for unknown binaries, and hand-drawn ASCII glyphs for disc images, archives, `.torrent` files, and OpenDocument/Microsoft Office documents. OpenVPN configs commonly embed credentials inline, so `.ovpn` files always show the VPN glyph in place of their content.
@@ -117,7 +117,7 @@ preview_width_pct   = 36
 layout_mode         = "left"    # left | right | top | no_sidebar | no_preview
 sidebar_row_spacing = 1         # blank rows between sidebar entries
 show_icons          = true      # Nerd Font type icons; needs a Nerd Font in the terminal
-view_mode           = "list"    # list | compact | detailed | grid | tree | columns
+view_mode           = "list"    # list | compact | detailed | grid | tree | columns | disks
 
 [preview]
 enabled          = true

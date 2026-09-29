@@ -28,7 +28,40 @@ const PSEUDO_FSTYPES: &[&str] = &[
     "efivarfs", "ramfs", "nsfs", "none",
 ];
 
-fn is_network_fstype(fstype: &str) -> bool {
+/// A single non-pseudo mount, shared by `detect()` (removable/network
+/// devices only) and `diskspace::detect_all()` (every real filesystem,
+/// including the root disk).
+pub struct RealMount {
+    pub device: String,
+    pub mountpoint: PathBuf,
+    pub fstype: String,
+}
+
+/// Every mounted filesystem that isn't a pseudo/virtual one (`proc`,
+/// `tmpfs`, container overlays, etc.), parsed once from
+/// `/proc/self/mounts` so both the sidebar's device detection and the disk
+/// usage view build on the same source of truth.
+pub fn all_real_mounts() -> Vec<RealMount> {
+    let Ok(content) = read_capped("/proc/self/mounts", MAX_MOUNTS_BYTES) else { return Vec::new() };
+    let mut mounts = Vec::new();
+    for line in content.lines() {
+        let mut fields = line.split_whitespace();
+        let Some(device) = fields.next() else { continue };
+        let Some(raw_mountpoint) = fields.next() else { continue };
+        let Some(fstype) = fields.next() else { continue };
+        if PSEUDO_FSTYPES.contains(&fstype) {
+            continue;
+        }
+        mounts.push(RealMount {
+            device: device.to_string(),
+            mountpoint: PathBuf::from(unescape_octal(raw_mountpoint)),
+            fstype: fstype.to_string(),
+        });
+    }
+    mounts
+}
+
+pub(crate) fn is_network_fstype(fstype: &str) -> bool {
     matches!(fstype, "nfs" | "nfs4" | "cifs" | "smbfs" | "smb3")
         || fstype.starts_with("fuse.sshfs")
         || fstype.starts_with("fuse.rclone")
@@ -41,7 +74,7 @@ fn is_network_fstype(fstype: &str) -> bool {
 /// actual device as a plain subdirectory inside it rather than as its own
 /// `/proc/self/mounts` entry, so matching on this path alone would only ever
 /// find that one bridge mount, never the individual phone/share inside it.
-fn is_conventional_mount_root(mountpoint: &str) -> bool {
+pub(crate) fn is_conventional_mount_root(mountpoint: &str) -> bool {
     mountpoint.starts_with("/media/") || mountpoint.starts_with("/run/media/") || mountpoint.starts_with("/mnt/")
 }
 
@@ -68,16 +101,16 @@ fn unescape_octal(s: &str) -> String {
 /// Nerd Font glyphs, verified against JetBrainsMonoNerdFont's real cmap (see
 /// the same verification approach used for file-type icons in
 /// ui/filelist.rs - a memorized PUA codepoint is not trustworthy on its own).
-const ICON_PHONE: &str = "\u{ed08}"; // fa-mobile
-const ICON_NETWORK: &str = "\u{ef09}"; // fa-network_wired
-const ICON_USB: &str = "\u{f287}"; // fa-usb
+pub(crate) const ICON_PHONE: &str = "\u{ed08}"; // fa-mobile
+pub(crate) const ICON_NETWORK: &str = "\u{ef09}"; // fa-network_wired
+pub(crate) const ICON_USB: &str = "\u{f287}"; // fa-usb
 
 /// Turn a mountpoint's last path segment (or, for a gvfs child, its raw
 /// directory name) into a readable label plus an icon. gvfs mount names are
 /// of the form `mtp:host=...`/`smb-share:server=...,share=...` with `%XX`
 /// percent-encoding; other mounts just use the directory name (typically the
 /// volume label, for udisks2/udiskie automounts).
-fn label_from_mountpoint(mountpoint: &str, default_icon: &'static str) -> (String, &'static str) {
+pub(crate) fn label_from_mountpoint(mountpoint: &str, default_icon: &'static str) -> (String, &'static str) {
     let raw = mountpoint.rsplit('/').find(|s| !s.is_empty()).unwrap_or("device");
     let decoded = percent_decode(raw);
 
@@ -140,7 +173,7 @@ pub fn detect() -> Vec<Bookmark> {
 /// phones over MTP, network shares connected via `gio mount` - as a plain
 /// subdirectory inside it, not as its own `/proc/self/mounts` entry. Listing
 /// that directory is the only way to see them individually.
-fn gvfs_children() -> Vec<Bookmark> {
+pub(crate) fn gvfs_children() -> Vec<Bookmark> {
     let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else { return Vec::new() };
     gvfs_children_at(&runtime_dir.join("gvfs"))
 }
