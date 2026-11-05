@@ -18,6 +18,7 @@ use crate::core::bookmarks::{self, Bookmark, Bookmarks};
 use crate::core::{ClipMode, Clipboard, Entry, Job, Listing, Recents, TransferClient, TransferError};
 use crate::fs::desktop_apps::{self, DesktopApp};
 use crate::fs::ops::{self, OpResult};
+use crate::fs::trash::{self, TrashError, TrashItem};
 use crate::fs::xdg::XdgDirs;
 use crate::preview::{PreviewContent, Previewer};
 use crate::theme::Theme;
@@ -78,6 +79,9 @@ pub enum Mode {
     /// `MimeType=` associations that claim to handle the focused file. `/`
     /// switches to the free-text `Prompt(OpenWith, _)` for a custom command.
     OpenWithPicker { apps: Vec<DesktopApp>, selected: usize },
+    /// Trash browser (`T`): lists freedesktop trash items, newest first.
+    /// `marked` holds indices into `items` toggled with Space.
+    Trash { items: Vec<TrashItem>, selected: usize, marked: HashSet<usize> },
 }
 
 pub struct StatusMsg {
@@ -941,6 +945,69 @@ impl App {
         }
     }
 
+    /// `T`: browse the trash and restore items.
+    fn open_trash(&mut self) {
+        match trash::list() {
+            Ok(items) if items.is_empty() => self.set_status("trash is empty".to_string()),
+            Ok(items) => self.mode = Mode::Trash { items, selected: 0, marked: HashSet::new() },
+            Err(TrashError::NotPresent) => self.set_status("trash is empty (no trash folder yet)".to_string()),
+            Err(TrashError::PermissionDenied) => self.set_error("permission denied reading the trash folder".to_string()),
+            Err(TrashError::Other(e)) => self.set_error(format!("could not read trash: {e}")),
+        }
+    }
+
+    fn handle_trash_key(&mut self, key: KeyEvent, items: Vec<TrashItem>, selected: usize, mut marked: HashSet<usize>) {
+        let last = items.len().saturating_sub(1);
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.mode = Mode::Trash { selected: (selected + 1).min(last), items, marked };
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.mode = Mode::Trash { selected: selected.saturating_sub(1), items, marked };
+            }
+            KeyCode::Char(' ') => {
+                if !marked.remove(&selected) {
+                    marked.insert(selected);
+                }
+                self.mode = Mode::Trash { selected: (selected + 1).min(last), items, marked };
+            }
+            KeyCode::Char('a') => {
+                let marked = (0..items.len()).collect();
+                self.mode = Mode::Trash { items, selected, marked };
+            }
+            KeyCode::Enter | KeyCode::Char('r') => {
+                let picks: Vec<usize> = if marked.is_empty() { vec![selected] } else { let mut v: Vec<_> = marked.into_iter().collect(); v.sort_unstable(); v };
+                let mut ok = 0usize;
+                let mut errors = Vec::new();
+                for i in picks {
+                    let Some(item) = items.get(i) else { continue };
+                    match trash::restore(item) {
+                        OpResult::Ok(_) => ok += 1,
+                        OpResult::PermissionDenied => errors.push(format!("permission denied: {}", item.original.display())),
+                        OpResult::NotFound => errors.push(format!("no longer in trash: {}", item.name)),
+                        OpResult::Err(e) => errors.push(e),
+                    }
+                }
+                self.reload_listing();
+                if errors.is_empty() {
+                    self.set_status(format!("restored {ok} item(s)"));
+                } else {
+                    self.set_error(format!("restored {ok}; {}", errors.join("; ")));
+                }
+                // Reopen with the refreshed list while anything is left.
+                match trash::list() {
+                    Ok(rest) if !rest.is_empty() => {
+                        let selected = selected.min(rest.len() - 1);
+                        self.mode = Mode::Trash { items: rest, selected, marked: HashSet::new() };
+                    }
+                    _ => self.mode = Mode::Normal,
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('T') => self.mode = Mode::Normal,
+            _ => self.mode = Mode::Trash { items, selected, marked },
+        }
+    }
+
     fn open_with_desktop_app(&mut self, app: &DesktopApp) {
         let Some(entry) = self.focused_entry() else { return };
         let path = entry.path.clone();
@@ -980,6 +1047,7 @@ impl App {
             Mode::ConfirmDelete(buf) => self.handle_confirm_delete_key(key, buf),
             Mode::ConfirmInstallEditor => return self.handle_confirm_install_editor_key(key),
             Mode::OpenWithPicker { apps, selected } => self.handle_open_with_picker_key(key, apps, selected),
+            Mode::Trash { items, selected, marked } => self.handle_trash_key(key, items, selected, marked),
         }
         Action::None
     }
@@ -1051,6 +1119,7 @@ impl App {
             KeyCode::Char('t') => self.mode = Mode::Prompt(PromptKind::Touch, String::new()),
             KeyCode::Char('L') => self.mode = Mode::Prompt(PromptKind::SymlinkTarget, String::new()),
             KeyCode::Char('O') => self.open_with_menu(),
+            KeyCode::Char('T') => self.open_trash(),
             KeyCode::Char('?') => self.mode = Mode::Help,
             KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
                 let idx = c.to_digit(10).unwrap() as usize - 1;

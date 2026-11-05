@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- A trash browser, opened with `T`: lists items in the freedesktop trash (`$XDG_DATA_HOME/Trash`) newest first with their original location. `Space` marks items, `a` marks all, `Enter` or `r` restores the marked items (or the highlighted one) to where they came from. Restoring never overwrites an existing file.
+
 ## [0.3.8] - 2026-09-29
 
 ### Added

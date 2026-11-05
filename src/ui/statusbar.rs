@@ -10,7 +10,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::ui::prompt;
 
-const HINTS: &str = "[c]opy [x]cut [p]aste [d]trash [D]elete [r]ename [n]ewdir [t]ouch [/]search [g]oto [?]help [q]uit";
+const HINTS: &str = "[c]opy [x]cut [p]aste [d]trash [T]rash bin [D]elete [r]ename [n]ewdir [t]ouch [/]search [g]oto [?]help [q]uit";
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;

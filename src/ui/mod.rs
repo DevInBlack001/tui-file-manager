@@ -78,6 +78,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
             ("L", "new symlink"),
             ("d", "trash"),
             ("D", "permanent delete (confirm)"),
+            ("T", "browse trash (Space mark, Enter/r restore)"),
         ],
     },
     HelpSection {
@@ -117,6 +118,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if let Mode::OpenWithPicker { apps, selected } = &app.mode {
         render_open_with_picker(frame, area, app, apps, *selected);
     }
+    if let Mode::Trash { items, selected, marked } = &app.mode {
+        render_trash(frame, area, app, items, *selected, marked);
+    }
 }
 
 fn render_open_with_picker(frame: &mut Frame, area: Rect, app: &App, apps: &[crate::fs::desktop_apps::DesktopApp], selected: usize) {
@@ -155,6 +159,73 @@ fn render_open_with_picker(frame: &mut Frame, area: Rect, app: &App, apps: &[cra
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             "j/k move, Enter open, / custom command, Esc cancel",
+            Style::default().fg(theme.muted),
+        )))
+        .alignment(ratatui::layout::Alignment::Center),
+        footer,
+    );
+}
+
+fn render_trash(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    items: &[crate::fs::trash::TrashItem],
+    selected: usize,
+    marked: &std::collections::HashSet<usize>,
+) {
+    let theme = &app.theme;
+    let popup = centered_rect(85, 75, area);
+
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .title(format!(" Trash ({}) ", items.len()))
+        .title_alignment(ratatui::layout::Alignment::Center)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme.accent))
+        .style(Style::default().bg(theme.bg_darker).fg(theme.fg));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+
+    let [list_area, detail, footer] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1), Constraint::Length(1)])
+        .areas(inner);
+
+    // Scroll so the cursor row stays visible.
+    let rows = list_area.height.max(1) as usize;
+    let start = selected.saturating_sub(rows - 1);
+    let lines: Vec<Line> = items
+        .iter()
+        .enumerate()
+        .skip(start)
+        .take(rows)
+        .map(|(i, it)| {
+            let style = if i == selected {
+                Style::default().fg(theme.fg_bright).bg(theme.selection_bg).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.fg)
+            };
+            let mark = if marked.contains(&i) { "*" } else { " " };
+            let date = it.deleted_at.replace('T', " ");
+            let name = if it.is_dir { format!("{}/", it.original.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| it.name.clone())) } else { it.original.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| it.name.clone()) };
+            Line::from(Span::styled(format!("{mark} {date:<20} {name}"), style))
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lines), list_area);
+
+    if let Some(it) = items.get(selected) {
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                format!(" from {}", it.original.display()),
+                Style::default().fg(theme.muted),
+            ))),
+            detail,
+        );
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "j/k move, Space mark, a mark all, Enter/r restore, Esc close",
             Style::default().fg(theme.muted),
         )))
         .alignment(ratatui::layout::Alignment::Center),
