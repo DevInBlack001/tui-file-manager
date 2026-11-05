@@ -8,6 +8,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -86,6 +87,18 @@ pub enum Mode {
     Trash { items: Vec<TrashItem>, selected: usize, marked: HashSet<usize> },
 }
 
+/// Results of work done off the UI thread. Anything that can block (a
+/// subprocess, `statvfs` on a stalled mount, archiving a large folder) runs
+/// on a short-lived thread and reports back through this channel, so the
+/// draw/input loop never waits on it.
+enum BgMsg {
+    Job(PathBuf, Option<Job>),
+    Mounts { devices: Vec<Bookmark>, disks: Vec<Bookmark> },
+    Mtp(HashSet<String>),
+    Enqueued { ok_msg: String, is_move: bool, result: Result<String, TransferError> },
+    Compressed { n: usize, name: String, result: OpResult },
+}
+
 pub struct StatusMsg {
     pub text: String,
     pub is_error: bool,
@@ -120,6 +133,13 @@ pub struct App {
     pub bookmarks: Bookmarks,
     pub transfer: TransferClient,
     mtp_mount_attempts: HashSet<String>,
+    bg_tx: Sender<BgMsg>,
+    bg_rx: Receiver<BgMsg>,
+    job_busy: bool,
+    mounts_busy: bool,
+    mtp_busy: bool,
+    /// Number of compress/enqueue tasks currently running.
+    tasks_running: usize,
 
     /// Whether the sidebar (rather than the file list) currently has
     /// keyboard focus - `b` toggles this. `1`-`9` jump directly to a
@@ -190,6 +210,7 @@ impl App {
 
         let transfer = TransferClient::new(config.transfer.ftctl_path.as_deref());
 
+        let (bg_tx, bg_rx) = mpsc::channel();
         let mut app = Self {
             config,
             theme,
@@ -209,6 +230,12 @@ impl App {
             bookmarks,
             transfer,
             mtp_mount_attempts: HashSet::new(),
+            bg_tx,
+            bg_rx,
+            job_busy: false,
+            mounts_busy: false,
+            mtp_busy: false,
+            tasks_running: 0,
             sidebar_focused: false,
             sidebar_cursor: 0,
             previewer: Previewer::new(),
@@ -279,40 +306,40 @@ impl App {
         }
     }
 
-    /// Refresh the sidebar's mounted-devices list, at most once every 3
-    /// seconds - a plain `/proc/self/mounts` read is cheap, but there's no
-    /// reason to redo it every frame.
+    /// Refresh the sidebar's device/disk lists and kick off MTP auto-mount,
+    /// each on a background thread: `statvfs` can hang on a stalled network
+    /// or phone mount and `gio mount -li` is a real subprocess, so neither
+    /// may run on the UI thread. At most one of each is in flight.
     pub fn maybe_poll_mounts(&mut self) {
-        // MTP auto-mount runs on its own, slightly longer cadence: it's a
-        // real subprocess call (`gio mount -li`), not just a /proc read.
-        if self.mtp_poll_at.elapsed() >= Duration::from_secs(5) {
+        if !self.mtp_busy && self.mtp_poll_at.elapsed() >= Duration::from_secs(5) {
             self.mtp_poll_at = Instant::now();
-            crate::core::mounts::mount_pending_mtp_devices(&mut self.mtp_mount_attempts);
+            self.mtp_busy = true;
+            let tx = self.bg_tx.clone();
+            let mut attempts = std::mem::take(&mut self.mtp_mount_attempts);
+            std::thread::spawn(move || {
+                crate::core::mounts::mount_pending_mtp_devices(&mut attempts);
+                let _ = tx.send(BgMsg::Mtp(attempts));
+            });
         }
 
-        if self.mounts_poll_at.elapsed() < Duration::from_secs(3) {
+        if self.mounts_busy || self.mounts_poll_at.elapsed() < Duration::from_secs(3) {
             return;
         }
         self.mounts_poll_at = Instant::now();
-        self.bookmarks.devices = crate::core::mounts::detect();
-        self.bookmarks.disks = crate::core::diskspace::detect_all_as_bookmarks();
-
-        // A device disappearing (unplugged) while the sidebar cursor was on
-        // it, or past it, would otherwise leave the cursor pointing beyond
-        // the now-shorter list.
-        let len = self.flattened_bookmarks().len();
-        if len == 0 {
-            self.sidebar_cursor = 0;
-        } else if self.sidebar_cursor >= len {
-            self.sidebar_cursor = len - 1;
-        }
+        self.mounts_busy = true;
+        let tx = self.bg_tx.clone();
+        std::thread::spawn(move || {
+            let devices = crate::core::mounts::detect();
+            let disks = crate::core::diskspace::detect_all_as_bookmarks();
+            let _ = tx.send(BgMsg::Mounts { devices, disks });
+        });
     }
 
     /// Poll the transfer daemon for a job touching the focused entry, at
-    /// most once every 2 seconds. `ftctl list` is a real subprocess call, so
-    /// this must never run on every frame.
+    /// most once every 2 seconds, on a background thread (`ftctl list` is a
+    /// real subprocess and gets slow while a transfer is saturating the disk).
     pub fn maybe_poll_job_status(&mut self) {
-        if !self.transfer.is_available() {
+        if self.job_busy || !self.transfer.is_available() {
             return;
         }
         if self.job_poll_at.elapsed() < Duration::from_secs(2) {
@@ -322,9 +349,66 @@ impl App {
         match self.focused_entry() {
             Some(e) => {
                 let path = e.path.clone();
-                self.focused_job = self.transfer.job_for_path(&path);
+                let client = self.transfer.clone();
+                let tx = self.bg_tx.clone();
+                self.job_busy = true;
+                std::thread::spawn(move || {
+                    let job = client.job_for_path(&path);
+                    let _ = tx.send(BgMsg::Job(path, job));
+                });
             }
             None => self.focused_job = None,
+        }
+    }
+
+    /// Apply results delivered by background threads. Called every frame;
+    /// never blocks.
+    pub fn poll_background(&mut self) {
+        while let Ok(msg) = self.bg_rx.try_recv() {
+            match msg {
+                BgMsg::Job(path, job) => {
+                    self.job_busy = false;
+                    // Drop a stale answer if the cursor has moved on.
+                    if self.focused_entry().map(|e| &e.path) == Some(&path) {
+                        self.focused_job = job;
+                    }
+                }
+                BgMsg::Mounts { devices, disks } => {
+                    self.mounts_busy = false;
+                    self.bookmarks.devices = devices;
+                    self.bookmarks.disks = disks;
+                    // A device disappearing (unplugged) while the sidebar
+                    // cursor was on or past it would otherwise leave the
+                    // cursor beyond the now-shorter list.
+                    let len = self.flattened_bookmarks().len();
+                    if len == 0 {
+                        self.sidebar_cursor = 0;
+                    } else if self.sidebar_cursor >= len {
+                        self.sidebar_cursor = len - 1;
+                    }
+                }
+                BgMsg::Mtp(attempts) => {
+                    self.mtp_busy = false;
+                    self.mtp_mount_attempts = attempts;
+                }
+                BgMsg::Enqueued { ok_msg, is_move, result } => {
+                    self.tasks_running = self.tasks_running.saturating_sub(1);
+                    match result {
+                        Ok(id) => {
+                            self.set_status(format!("{ok_msg} (job {id})"));
+                            if is_move {
+                                self.clipboard.clear();
+                            }
+                        }
+                        Err(e) => self.set_error(describe_transfer_error(&e)),
+                    }
+                }
+                BgMsg::Compressed { n, name, result } => {
+                    self.tasks_running = self.tasks_running.saturating_sub(1);
+                    self.report_op(result, format!("compressed {n} item(s) into '{name}'"));
+                    self.reload_listing();
+                }
+            }
         }
     }
 
@@ -645,15 +729,22 @@ impl App {
         }
         let is_move = matches!(self.clipboard.mode, Some(ClipMode::Move));
         let mode_str = if is_move { "move" } else { "copy" };
-        match self.transfer.enqueue(mode_str, &self.clipboard.paths, &self.cwd) {
-            Ok(id) => {
-                self.set_status(format!("queued {mode_str} job {id}"));
-                if is_move {
-                    self.clipboard.clear();
-                }
-            }
-            Err(e) => self.set_error(describe_transfer_error(&e)),
-        }
+        let client = self.transfer.clone();
+        let paths = self.clipboard.paths.clone();
+        let dest = self.cwd.clone();
+        self.spawn_enqueue(client, mode_str, paths, dest, format!("queued {mode_str}"), is_move);
+    }
+
+    /// Run `ftctl enqueue` off the UI thread; the outcome arrives as
+    /// `BgMsg::Enqueued`.
+    fn spawn_enqueue(&mut self, client: TransferClient, mode: &'static str, paths: Vec<PathBuf>, dest: PathBuf, ok_msg: String, is_move: bool) {
+        let tx = self.bg_tx.clone();
+        self.tasks_running += 1;
+        self.set_status(format!("queuing {mode}..."));
+        std::thread::spawn(move || {
+            let result = client.enqueue(mode, &paths, &dest);
+            let _ = tx.send(BgMsg::Enqueued { ok_msg, is_move, result });
+        });
     }
 
     /// `u`: send the selected entries (or the focused one) directly to a
@@ -672,10 +763,8 @@ impl App {
             return;
         }
         let n = paths.len();
-        match self.transfer.enqueue("copy", &paths, Path::new(spec)) {
-            Ok(id) => self.set_status(format!("queued send of {n} item(s) to {spec} (job {id})")),
-            Err(e) => self.set_error(describe_transfer_error(&e)),
-        }
+        let client = self.transfer.clone();
+        self.spawn_enqueue(client, "copy", paths, PathBuf::from(spec), format!("queued send of {n} item(s) to {spec}"), false);
     }
 
     fn show_clipboard(&mut self) {
@@ -786,9 +875,14 @@ impl App {
                 let paths = self.selection_or_cursor();
                 let n = paths.len();
                 let name = input.trim().to_string();
-                let result = ops::compress(&self.cwd, &paths, &name);
-                self.report_op(result, format!("compressed {n} item(s) into '{name}'"));
-                self.reload_listing();
+                let cwd = self.cwd.clone();
+                let tx = self.bg_tx.clone();
+                self.tasks_running += 1;
+                self.set_status(format!("compressing {n} item(s) into '{name}'..."));
+                std::thread::spawn(move || {
+                    let result = ops::compress(&cwd, &paths, &name);
+                    let _ = tx.send(BgMsg::Compressed { n, name, result });
+                });
             }
         }
         self.mode = Mode::Normal;

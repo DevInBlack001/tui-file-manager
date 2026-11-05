@@ -91,6 +91,7 @@ struct ListResponse {
 ///
 /// Construct with `TransferClient::new(override_path)`. Call `is_available()`
 /// to check whether ftctl was found before attempting operations.
+#[derive(Clone)]
 pub struct TransferClient {
     /// Resolved absolute path to the ftctl binary, or None if not found.
     ftctl: Option<PathBuf>,

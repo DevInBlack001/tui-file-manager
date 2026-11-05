@@ -1,6 +1,6 @@
 # Maintainer: DevInBlack001 <DevInBlack001@users.noreply.github.com>
 pkgname=tui-file-manager
-pkgver=0.4.0
+pkgver=0.4.1
 pkgrel=1
 pkgdesc="Keyboard-driven TUI file manager for Arch/Omarchy (binary: fim)"
 arch=('x86_64')

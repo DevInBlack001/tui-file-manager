@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] - 2026-11-05
+
+### Fixed
+
+- UI freezes and lag, worst during transfers. Everything that could block now runs on a background thread and reports back without stalling the draw/input loop: compression (`Z`), queuing copy/move/send jobs (`p`, `u`), the per-focus `ftctl list` job lookup (which slows down while a transfer saturates the disk), the sidebar's device and disk refresh (`statvfs` can hang on a stalled network or phone mount), and MTP auto-mount. A slow or hung mount no longer freezes the interface, and at most one of each poll runs at a time.
+
 ## [0.4.0] - 2026-11-05
 
 ### Added
