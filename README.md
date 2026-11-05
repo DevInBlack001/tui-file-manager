@@ -99,6 +99,8 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `P` | Show clipboard contents |
 | `d` | Trash |
 | `D` | Permanent delete (typed confirmation) |
+| `T` | Browse trash (`Space` mark, `Enter`/`r` restore) |
+| `Z` | Compress selection (`.tar.gz` default; `.zip`, `.tar`, `.tar.xz`, `.tar.zst` by extension) |
 | `r` | Rename |
 | `n` / `t` | New directory / new file |
 | `L` | New symlink |

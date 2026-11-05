@@ -1,6 +1,6 @@
 # Maintainer: DevInBlack001 <DevInBlack001@users.noreply.github.com>
 pkgname=tui-file-manager
-pkgver=0.3.8
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="Keyboard-driven TUI file manager for Arch/Omarchy (binary: fim)"
 arch=('x86_64')
@@ -13,6 +13,7 @@ optdepends=(
     'ffmpegthumbnailer: video thumbnails'
     'bat: syntax-highlighted text previews'
     'trash-cli: trash (soft-delete) support'
+    'zip: create .zip archives (Z)'
     'poppler: pdftotext, for PDF first-page previews'
     'ttf-jetbrains-mono-nerd: directory/file type icons in the file list'
     'python-pywal: live theme colors on non-Omarchy systems'
