@@ -140,6 +140,67 @@ pub fn delete(path: &Path) -> OpResult {
     }
 }
 
+/// Archive `paths` (all direct children of `cwd`) into `cwd/archive`.
+///
+/// The format follows the archive name: `.zip`, `.tar`, `.tar.gz`/`.tgz`,
+/// `.tar.xz`, `.tar.zst`. Runs `tar`/`zip` with an argument list (no shell)
+/// from inside `cwd` so stored paths are relative. Never overwrites, and
+/// removes a partial archive if the tool fails.
+pub fn compress(cwd: &Path, paths: &[PathBuf], archive: &str) -> OpResult {
+    if let Err(e) = validate_name(archive) {
+        return e;
+    }
+    let mut names = Vec::new();
+    for p in paths {
+        match (p.parent(), p.file_name()) {
+            (Some(parent), Some(n)) if parent == cwd => names.push(n.to_os_string()),
+            _ => return OpResult::Err("items must be in the current folder".to_string()),
+        }
+    }
+    if names.is_empty() {
+        return OpResult::Err("nothing to compress".to_string());
+    }
+    let target = cwd.join(archive);
+    if target.symlink_metadata().is_ok() {
+        return OpResult::Err(format!("'{archive}' already exists"));
+    }
+
+    let lower = archive.to_lowercase();
+    let (tool, mut args): (&str, Vec<std::ffi::OsString>) = if lower.ends_with(".zip") {
+        ("zip", vec!["-r".into(), "-q".into(), format!("./{archive}").into(), "--".into()])
+    } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        ("tar", vec!["-czf".into(), format!("./{archive}").into(), "--".into()])
+    } else if lower.ends_with(".tar.xz") {
+        ("tar", vec!["-cJf".into(), format!("./{archive}").into(), "--".into()])
+    } else if lower.ends_with(".tar.zst") {
+        ("tar", vec!["--zstd".into(), "-cf".into(), format!("./{archive}").into(), "--".into()])
+    } else if lower.ends_with(".tar") {
+        ("tar", vec!["-cf".into(), format!("./{archive}").into(), "--".into()])
+    } else {
+        return OpResult::Err("use .zip, .tar, .tar.gz, .tgz, .tar.xz or .tar.zst".to_string());
+    };
+    args.extend(names);
+
+    let Some(bin) = resolve_bin(tool) else {
+        return OpResult::Err(format!("'{tool}' not found. Install it with: sudo pacman -S {tool}"));
+    };
+    match Command::new(&bin)
+        .args(&args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::null())
+        .output()
+    {
+        Ok(out) if out.status.success() => OpResult::Ok(format!("created '{archive}'")),
+        Ok(out) => {
+            let _ = std::fs::remove_file(&target);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let first = stderr.lines().next().unwrap_or("unknown error");
+            OpResult::Err(format!("{tool} failed: {first}"))
+        }
+        Err(e) => OpResult::Err(format!("could not execute '{}': {e}", bin.display())),
+    }
+}
+
 /// Move `path` to the user's trash using `trash-put`.
 ///
 /// Binary search order:
@@ -235,4 +296,39 @@ fn find_trash_put() -> Option<PathBuf> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod compress_tests {
+    use super::*;
+
+    fn setup() -> tempfile::TempDir {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir(t.path().join("d")).unwrap();
+        std::fs::write(t.path().join("d/a.txt"), b"a").unwrap();
+        std::fs::write(t.path().join("b.txt"), b"b").unwrap();
+        t
+    }
+
+    #[test]
+    fn compresses_folder_and_file_to_each_format() {
+        for ext in ["zip", "tar", "tar.gz", "tgz", "tar.xz", "tar.zst"] {
+            let t = setup();
+            let name = format!("out.{ext}");
+            let paths = vec![t.path().join("d"), t.path().join("b.txt")];
+            assert!(matches!(compress(t.path(), &paths, &name), OpResult::Ok(_)), "{ext}");
+            assert!(t.path().join(&name).metadata().unwrap().len() > 0, "{ext}");
+        }
+    }
+
+    #[test]
+    fn refuses_overwrite_unknown_ext_and_foreign_paths() {
+        let t = setup();
+        let paths = vec![t.path().join("b.txt")];
+        std::fs::write(t.path().join("x.zip"), b"keep").unwrap();
+        assert!(matches!(compress(t.path(), &paths, "x.zip"), OpResult::Err(_)));
+        assert_eq!(std::fs::read(t.path().join("x.zip")).unwrap(), b"keep");
+        assert!(matches!(compress(t.path(), &paths, "x.rar"), OpResult::Err(_)));
+        assert!(matches!(compress(t.path(), &[PathBuf::from("/etc/hostname")], "y.zip"), OpResult::Err(_)));
+    }
 }

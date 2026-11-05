@@ -78,6 +78,7 @@ const HELP_SECTIONS: &[HelpSection] = &[
             ("L", "new symlink"),
             ("d", "trash"),
             ("D", "permanent delete (confirm)"),
+            ("Z", "compress selection (.tar.gz default; .zip .tar .tar.xz .tar.zst by extension)"),
             ("T", "browse trash (Space mark, Enter/r restore)"),
         ],
     },

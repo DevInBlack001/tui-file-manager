@@ -49,6 +49,7 @@ pub enum PromptKind {
     SymlinkName,
     OpenWith,
     SendRemote,
+    Compress,
 }
 
 impl PromptKind {
@@ -61,6 +62,7 @@ impl PromptKind {
             PromptKind::SymlinkName => "symlink name",
             PromptKind::OpenWith => "open with",
             PromptKind::SendRemote => "send to (user@host:/path)",
+            PromptKind::Compress => "archive name",
         }
     }
 }
@@ -780,6 +782,14 @@ impl App {
             }
             PromptKind::OpenWith => self.open_with(&input),
             PromptKind::SendRemote => self.send_to_remote(&input),
+            PromptKind::Compress => {
+                let paths = self.selection_or_cursor();
+                let n = paths.len();
+                let name = input.trim().to_string();
+                let result = ops::compress(&self.cwd, &paths, &name);
+                self.report_op(result, format!("compressed {n} item(s) into '{name}'"));
+                self.reload_listing();
+            }
         }
         self.mode = Mode::Normal;
     }
@@ -943,6 +953,23 @@ impl App {
             KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Normal,
             _ => self.mode = Mode::OpenWithPicker { apps, selected },
         }
+    }
+
+    /// `Z`: compress the selection (or the focused entry). The prompt is
+    /// prefilled with a `.tar.gz` name; change the extension to pick another
+    /// format (`.zip`, `.tar`, `.tar.xz`, `.tar.zst`).
+    fn begin_compress(&mut self) {
+        let paths = self.selection_or_cursor();
+        if paths.is_empty() {
+            return;
+        }
+        let base = if paths.len() == 1 {
+            paths[0].file_name().map(|n| n.to_string_lossy().into_owned())
+        } else {
+            self.cwd.file_name().map(|n| n.to_string_lossy().into_owned())
+        }
+        .unwrap_or_else(|| "archive".to_string());
+        self.mode = Mode::Prompt(PromptKind::Compress, format!("{base}.tar.gz"));
     }
 
     /// `T`: browse the trash and restore items.
@@ -1120,6 +1147,7 @@ impl App {
             KeyCode::Char('L') => self.mode = Mode::Prompt(PromptKind::SymlinkTarget, String::new()),
             KeyCode::Char('O') => self.open_with_menu(),
             KeyCode::Char('T') => self.open_trash(),
+            KeyCode::Char('Z') => self.begin_compress(),
             KeyCode::Char('?') => self.mode = Mode::Help,
             KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
                 let idx = c.to_digit(10).unwrap() as usize - 1;
