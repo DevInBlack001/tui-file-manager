@@ -244,6 +244,35 @@ pub fn trash(path: &Path) -> OpResult {
     }
 }
 
+/// Launch `bin args` fully detached from fim: its own session (so closing
+/// fim or its terminal, and the SIGHUP that follows, does not kill it), null
+/// stdio, and a reaper thread so the finished child never lingers as a zombie.
+pub fn spawn_detached(bin: &Path, args: &[String]) -> std::io::Result<()> {
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+
+    let mut cmd = Command::new(bin);
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: setsid is async-signal-safe and the closure touches no
+    // allocator or locks, as pre_exec requires.
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = cmd.spawn()?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 /// Resolve `name` to an absolute executable path without invoking a shell.
 ///
 /// If `name` already contains a `/` it is used as-is (validated to be a
@@ -330,5 +359,20 @@ mod compress_tests {
         assert_eq!(std::fs::read(t.path().join("x.zip")).unwrap(), b"keep");
         assert!(matches!(compress(t.path(), &paths, "x.rar"), OpResult::Err(_)));
         assert!(matches!(compress(t.path(), &[PathBuf::from("/etc/hostname")], "y.zip"), OpResult::Err(_)));
+    }
+
+    #[test]
+    fn spawn_detached_runs_in_its_own_session() {
+        let t = setup();
+        let out = t.path().join("sid");
+        let script = format!("ps -o sid= -p $$ > '{}'", out.display());
+        spawn_detached(Path::new("/bin/sh"), &["-c".to_string(), script]).unwrap();
+        for _ in 0..50 {
+            if std::fs::metadata(&out).map(|m| m.len() > 0).unwrap_or(false) { break; }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let child_sid: i32 = std::fs::read_to_string(&out).unwrap().trim().parse().unwrap();
+        let own_sid = unsafe { libc::getsid(0) };
+        assert_ne!(child_sid, own_sid);
     }
 }

@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.2] - 2026-11-15
+
+### Fixed
+
+- Files opened from fim (`xdg-open`, "Open with", `O` app picker) no longer close when fim or its terminal closes. They now launch in their own session.
+- Opened apps no longer leave zombie processes behind.
+
+### Changed
+
+- The per-focus job lookup talks to the `filetransferd` socket directly instead of spawning `ftctl list` every 2 seconds, which cuts idle CPU use. Polling no longer starts the daemon.
+
 ## [0.4.1] - 2026-11-05
 
 ### Fixed

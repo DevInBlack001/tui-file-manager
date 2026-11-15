@@ -9,7 +9,7 @@
 //   - List response capped at 4 MiB before JSON parse.
 //   - No string concatenation for shell command construction.
 
-use std::io::{self, Read};
+use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -188,29 +188,12 @@ impl TransferClient {
     /// Returns None when ftctl is unavailable, the daemon is unreachable,
     /// or the response cannot be parsed.
     pub fn list_jobs(&self) -> Option<Vec<Job>> {
-        let ftctl = self.ftctl.as_ref()?;
-
-        // The real ftctl `list` subcommand takes no flags and emits JSON by
-        // default; passing `--json` causes it to reject the call outright
-        // (confirmed against the installed daemon).
-        let mut cmd = std::process::Command::new(ftctl);
-        cmd.arg("list");
-
-        let output = run_with_timeout(cmd, Duration::from_secs(5)).ok()?;
-
-        if !output.status.success() {
-            return None;
-        }
-
-        // Cap response at 4 MiB before parsing.
-        const CAP: usize = 4 * 1024 * 1024;
-        let bytes = if output.stdout.len() > CAP {
-            &output.stdout[..CAP]
-        } else {
-            &output.stdout
-        };
-
-        let parsed: ListResponse = serde_json::from_slice(bytes).ok()?;
+        // Talk to the daemon's Unix socket directly: this is polled every
+        // couple of seconds, and spawning a Python `ftctl list` each time
+        // was the dominant cost. Polling never starts the daemon; enqueue
+        // (which still goes through ftctl) does.
+        let bytes = query_list_socket()?;
+        let parsed: ListResponse = serde_json::from_slice(&bytes).ok()?;
 
         Some(
             parsed
@@ -248,6 +231,34 @@ impl TransferClient {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/// Send `{"cmd":"list"}` to filetransferd's socket
+/// (`$XDG_RUNTIME_DIR/filetransferd/ctl.sock`, same path as ft_common.py) and
+/// return the raw one-line JSON reply. None when the daemon is not running or
+/// the reply is missing, oversized or not ok. Reads are bounded and timed out.
+fn query_list_socket() -> Option<Vec<u8>> {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+
+    // Same cap the daemon enforces on its side (MAX_LINE_BYTES).
+    const CAP: u64 = 2 * 1024 * 1024;
+
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
+    let sock_path = PathBuf::from(runtime).join("filetransferd").join("ctl.sock");
+
+    let mut stream = UnixStream::connect(sock_path).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
+    stream.set_write_timeout(Some(Duration::from_secs(5))).ok()?;
+    stream.write_all(b"{\"cmd\":\"list\",\"args\":{}}\n").ok()?;
+
+    // The reply is a single newline-terminated JSON line.
+    let mut buf = Vec::new();
+    std::io::BufReader::new(stream.take(CAP)).read_until(b'\n', &mut buf).ok()?;
+    if buf.is_empty() {
+        return None;
+    }
+    Some(buf)
+}
 
 /// Validate that symlink sources do not escape $HOME.
 ///

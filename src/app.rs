@@ -967,12 +967,7 @@ impl App {
         let path = entry.path.clone();
         match ops::resolve_bin("xdg-open") {
             Some(bin) => {
-                let spawned = std::process::Command::new(&bin)
-                    .arg(&path)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                let spawned = ops::spawn_detached(&bin, &[path.to_string_lossy().into_owned()]);
                 match spawned {
                     Ok(_) => self.set_status(format!("opened '{}' via xdg-open", path.display())),
                     Err(e) => self.set_error(format!("xdg-open failed: {e}")),
@@ -990,12 +985,7 @@ impl App {
         let path = entry.path.clone();
         match resolve_command_line(cmdline, &path) {
             Some((bin, args)) => {
-                let spawned = std::process::Command::new(&bin)
-                    .args(&args)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                let spawned = ops::spawn_detached(&bin, &args);
                 match spawned {
                     Ok(_) => self.set_status(format!("opened with '{cmdline}'")),
                     Err(e) => self.set_error(format!("failed to launch '{cmdline}': {e}")),
@@ -1134,12 +1124,7 @@ impl App {
         let path = entry.path.clone();
         match desktop_apps::resolve_desktop_exec(&app.exec, &path) {
             Some((bin, args)) => {
-                let spawned = std::process::Command::new(&bin)
-                    .args(&args)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                let spawned = ops::spawn_detached(&bin, &args);
                 match spawned {
                     Ok(_) => self.set_status(format!("opened with {}", app.name)),
                     Err(e) => self.set_error(format!("failed to launch '{}': {e}", app.name)),
