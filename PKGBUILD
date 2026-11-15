@@ -1,6 +1,6 @@
 # Maintainer: DevInBlack001 <DevInBlack001@users.noreply.github.com>
 pkgname=tui-file-manager
-pkgver=0.4.1
+pkgver=0.4.2
 pkgrel=1
 pkgdesc="Keyboard-driven TUI file manager for Arch/Omarchy (binary: fim)"
 arch=('x86_64')
@@ -24,7 +24,7 @@ optdepends=(
 provides=('fim')
 conflicts=('fim')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/DevInBlack001/tui-file-manager/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('6e866bed86bd1812924309ec6b143fddd494ecd23b77fae6db97cde97197ef3d')
+sha256sums=('94b2211afff4361954294dcaac050fe2e625c3e0a6e468b4daf21bd0772432ab')
 
 prepare() {
     cd "$pkgname-$pkgver"
