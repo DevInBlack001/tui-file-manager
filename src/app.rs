@@ -6,7 +6,7 @@
 // stays in main.rs, which also handles the one action (`RunForeground`) that
 // needs to suspend the TUI.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -68,11 +68,60 @@ impl PromptKind {
     }
 }
 
+/// A single-line text buffer with an editing cursor (char index), used by
+/// the name/path prompts so Left/Right/Home/End/Delete work mid-text.
+#[derive(Default, Clone)]
+pub struct Input {
+    pub text: String,
+    /// Cursor position in chars (0..=char count).
+    pub cursor: usize,
+}
+
+impl From<String> for Input {
+    fn from(text: String) -> Self {
+        let cursor = text.chars().count();
+        Self { text, cursor }
+    }
+}
+
+impl Input {
+    fn byte_at(&self, char_idx: usize) -> usize {
+        self.text.char_indices().nth(char_idx).map(|(i, _)| i).unwrap_or(self.text.len())
+    }
+
+    /// Apply an editing key. Returns true when the key was an editing key.
+    pub fn handle(&mut self, key: &KeyEvent) -> bool {
+        let len = self.text.chars().count();
+        match key.code {
+            KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
+            KeyCode::Right => self.cursor = (self.cursor + 1).min(len),
+            KeyCode::Home => self.cursor = 0,
+            KeyCode::End => self.cursor = len,
+            KeyCode::Backspace if self.cursor > 0 => {
+                self.cursor -= 1;
+                let at = self.byte_at(self.cursor);
+                self.text.remove(at);
+            }
+            KeyCode::Delete if self.cursor < len => {
+                let at = self.byte_at(self.cursor);
+                self.text.remove(at);
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let at = self.byte_at(self.cursor);
+                self.text.insert(at, c);
+                self.cursor += 1;
+            }
+            _ => return false,
+        }
+        true
+    }
+}
+
 pub enum Mode {
     Normal,
     Search,
-    GotoPath(String),
-    Prompt(PromptKind, String),
+    GotoPath(Input),
+    Prompt(PromptKind, Input),
     ConfirmDelete(String),
     /// `nvim` (fim's preferred default editor) is missing; ask before
     /// installing it via `sudo pacman -S neovim`.
@@ -92,16 +141,26 @@ pub enum Mode {
 /// on a short-lived thread and reports back through this channel, so the
 /// draw/input loop never waits on it.
 enum BgMsg {
-    Job(PathBuf, Option<Job>),
+    /// One poll of the transfer daemon: the cursor path it was taken for and
+    /// the full job list (None when the daemon is unreachable).
+    Jobs { path: Option<PathBuf>, jobs: Option<Vec<Job>> },
     Mounts { devices: Vec<Bookmark>, disks: Vec<Bookmark> },
     Mtp(HashSet<String>),
     Enqueued { ok_msg: String, is_move: bool, result: Result<String, TransferError> },
     Compressed { n: usize, name: String, result: OpResult },
 }
 
+/// How long a finished-action message stays in the status bar.
+const STATUS_TTL: Duration = Duration::from_secs(4);
+
 pub struct StatusMsg {
     pub text: String,
     pub is_error: bool,
+    /// When the message was set; finished messages expire `STATUS_TTL` later.
+    pub at: Instant,
+    /// An in-progress message ("compressing..."): stays until replaced by
+    /// the action's result, then that result starts its own countdown.
+    pub live: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +195,12 @@ pub struct App {
     bg_tx: Sender<BgMsg>,
     bg_rx: Receiver<BgMsg>,
     job_busy: bool,
+    /// Running transfer jobs seen on the last poll (id -> (mode, title)), so
+    /// a job that disappears from the running set can be reported as finished.
+    tracked_jobs: HashMap<String, (String, String)>,
+    /// Live one-line summary of running jobs for the status bar, e.g.
+    /// "compressing docs.tar.gz 43%". Shown when no other message is up.
+    pub job_summary: Option<String>,
     mounts_busy: bool,
     mtp_busy: bool,
     /// Number of compress/enqueue tasks currently running.
@@ -233,6 +298,8 @@ impl App {
             bg_tx,
             bg_rx,
             job_busy: false,
+            tracked_jobs: HashMap::new(),
+            job_summary: None,
             mounts_busy: false,
             mtp_busy: false,
             tasks_running: 0,
@@ -342,22 +409,86 @@ impl App {
         if self.job_busy || !self.transfer.is_available() {
             return;
         }
-        if self.job_poll_at.elapsed() < Duration::from_secs(2) {
+        // Poll faster while something is running so progress feels live.
+        let every = if self.tracked_jobs.is_empty() { Duration::from_secs(2) } else { Duration::from_millis(700) };
+        if self.job_poll_at.elapsed() < every {
             return;
         }
         self.job_poll_at = Instant::now();
-        match self.focused_entry() {
-            Some(e) => {
-                let path = e.path.clone();
-                let client = self.transfer.clone();
-                let tx = self.bg_tx.clone();
-                self.job_busy = true;
-                std::thread::spawn(move || {
-                    let job = client.job_for_path(&path);
-                    let _ = tx.send(BgMsg::Job(path, job));
-                });
+        let path = self.focused_entry().map(|e| e.path.clone());
+        let client = self.transfer.clone();
+        let tx = self.bg_tx.clone();
+        self.job_busy = true;
+        std::thread::spawn(move || {
+            let jobs = client.list_jobs();
+            let _ = tx.send(BgMsg::Jobs { path, jobs });
+        });
+    }
+
+    /// Fold one daemon poll into the focused-entry job, the live status-bar
+    /// summary, and "finished" notices for jobs that just stopped running.
+    fn apply_jobs(&mut self, path: Option<PathBuf>, jobs: Option<Vec<Job>>) {
+        let Some(jobs) = jobs else {
+            self.focused_job = None;
+            self.job_summary = None;
+            self.tracked_jobs.clear();
+            return;
+        };
+
+        // Drop a stale answer if the cursor has moved on.
+        if self.focused_entry().map(|e| &e.path) == path.as_ref() {
+            self.focused_job = path.as_ref().and_then(|p| {
+                let p = p.to_string_lossy();
+                jobs.iter().find(|j| j.dest == p || j.sources.iter().any(|s| s == p.as_ref())).cloned()
+            });
+        }
+
+        let running: Vec<&Job> = jobs.iter().filter(|j| j.state == "running").collect();
+        self.job_summary = running.first().map(|j| {
+            let mut s = format!("{} {}", job_verb(&j.mode, false), job_title(j));
+            if let Some(p) = j.pct {
+                s.push_str(&format!(" {p}%"));
             }
-            None => self.focused_job = None,
+            if running.len() > 1 {
+                s.push_str(&format!(" (+{} more)", running.len() - 1));
+            }
+            s
+        });
+
+        // Anything tracked last time that is no longer running has finished.
+        let still: HashSet<&str> = running.iter().map(|j| j.id.as_str()).collect();
+        let finished: Vec<(String, (String, String))> = self
+            .tracked_jobs
+            .iter()
+            .filter(|(id, _)| !still.contains(id.as_str()))
+            .map(|(id, v)| (id.clone(), v.clone()))
+            .collect();
+        let mut reload = false;
+        for (id, (mode, title)) in finished {
+            self.tracked_jobs.remove(&id);
+            match jobs.iter().find(|j| j.id == id).map(|j| j.state.as_str()) {
+                Some("done") => {
+                    self.set_status(format!("{} {title}", job_verb(&mode, true)));
+                    reload = true;
+                }
+                Some("error") => {
+                    let err = jobs.iter().find(|j| j.id == id).map(|j| j.error.clone()).unwrap_or_default();
+                    self.set_error(format!("{} {title} failed{}", job_verb(&mode, false), if err.is_empty() { String::new() } else { format!(": {}", err.lines().next().unwrap_or("")) }));
+                    reload = true;
+                }
+                Some("cancelled") => self.set_status(format!("cancelled {} {title}", job_verb(&mode, false))),
+                // Paused or back in the queue: keep watching it.
+                Some("paused") | Some("queued") => {
+                    self.tracked_jobs.insert(id, (mode, title));
+                }
+                _ => {}
+            }
+        }
+        if reload {
+            self.reload_listing();
+        }
+        for j in running {
+            self.tracked_jobs.entry(j.id.clone()).or_insert_with(|| (j.mode.clone(), job_title(j)));
         }
     }
 
@@ -366,12 +497,9 @@ impl App {
     pub fn poll_background(&mut self) {
         while let Ok(msg) = self.bg_rx.try_recv() {
             match msg {
-                BgMsg::Job(path, job) => {
+                BgMsg::Jobs { path, jobs } => {
                     self.job_busy = false;
-                    // Drop a stale answer if the cursor has moved on.
-                    if self.focused_entry().map(|e| &e.path) == Some(&path) {
-                        self.focused_job = job;
-                    }
+                    self.apply_jobs(path, jobs);
                 }
                 BgMsg::Mounts { devices, disks } => {
                     self.mounts_busy = false;
@@ -472,11 +600,24 @@ impl App {
     // -----------------------------------------------------------------------
 
     fn set_status(&mut self, text: String) {
-        self.status = Some(StatusMsg { text, is_error: false });
+        self.status = Some(StatusMsg { text, is_error: false, at: Instant::now(), live: false });
     }
 
     fn set_error(&mut self, text: String) {
-        self.status = Some(StatusMsg { text, is_error: true });
+        self.status = Some(StatusMsg { text, is_error: true, at: Instant::now(), live: false });
+    }
+
+    /// Show an in-progress message that is replaced when the action reports back.
+    fn set_live(&mut self, text: String) {
+        self.status = Some(StatusMsg { text, is_error: false, at: Instant::now(), live: true });
+    }
+
+    /// Drop a finished status message once it has been visible for `STATUS_TTL`.
+    /// Called every frame.
+    pub fn expire_status(&mut self) {
+        if matches!(&self.status, Some(s) if !s.live && s.at.elapsed() >= STATUS_TTL) {
+            self.status = None;
+        }
     }
 
     fn report_op(&mut self, result: OpResult, ok_msg: String) {
@@ -740,7 +881,7 @@ impl App {
     fn spawn_enqueue(&mut self, client: TransferClient, mode: &'static str, paths: Vec<PathBuf>, dest: PathBuf, ok_msg: String, is_move: bool) {
         let tx = self.bg_tx.clone();
         self.tasks_running += 1;
-        self.set_status(format!("queuing {mode}..."));
+        self.set_live(format!("queuing {mode}..."));
         std::thread::spawn(move || {
             let result = client.enqueue(mode, &paths, &dest);
             let _ = tx.send(BgMsg::Enqueued { ok_msg, is_move, result });
@@ -854,7 +995,7 @@ impl App {
             }
             PromptKind::SymlinkTarget => {
                 self.pending_symlink_target = Some(input);
-                self.mode = Mode::Prompt(PromptKind::SymlinkName, String::new());
+                self.mode = Mode::Prompt(PromptKind::SymlinkName, Input::default());
                 return;
             }
             PromptKind::SymlinkName => {
@@ -876,13 +1017,20 @@ impl App {
                 let n = paths.len();
                 let name = input.trim().to_string();
                 let cwd = self.cwd.clone();
-                let tx = self.bg_tx.clone();
-                self.tasks_running += 1;
-                self.set_status(format!("compressing {n} item(s) into '{name}'..."));
-                std::thread::spawn(move || {
-                    let result = ops::compress(&cwd, &paths, &name);
-                    let _ = tx.send(BgMsg::Compressed { n, name, result });
-                });
+                if self.transfer.is_available() {
+                    // Run it in the transfer daemon so progress shows in the
+                    // transfer manager and in fim's own status bar.
+                    let client = self.transfer.clone();
+                    self.spawn_enqueue(client, "compress", paths, cwd.join(&name), format!("queued compress of {n} item(s) into '{name}'"), false);
+                } else {
+                    let tx = self.bg_tx.clone();
+                    self.tasks_running += 1;
+                    self.set_live(format!("compressing {n} item(s) into '{name}'..."));
+                    std::thread::spawn(move || {
+                        let result = ops::compress(&cwd, &paths, &name);
+                        let _ = tx.send(BgMsg::Compressed { n, name, result });
+                    });
+                }
             }
         }
         self.mode = Mode::Normal;
@@ -1004,12 +1152,12 @@ impl App {
     /// or nothing matched, so typing a custom command always still works.
     fn open_with_menu(&mut self) {
         let Some(mime) = self.focused_mime.clone() else {
-            self.mode = Mode::Prompt(PromptKind::OpenWith, String::new());
+            self.mode = Mode::Prompt(PromptKind::OpenWith, Input::default());
             return;
         };
         let apps = desktop_apps::candidates_for_mime(&mime);
         self.mode = if apps.is_empty() {
-            Mode::Prompt(PromptKind::OpenWith, String::new())
+            Mode::Prompt(PromptKind::OpenWith, Input::default())
         } else {
             Mode::OpenWithPicker { apps, selected: 0 }
         };
@@ -1032,7 +1180,7 @@ impl App {
                 self.mode = Mode::Normal;
             }
             KeyCode::Char('/') | KeyCode::Char('c') => {
-                self.mode = Mode::Prompt(PromptKind::OpenWith, String::new());
+                self.mode = Mode::Prompt(PromptKind::OpenWith, Input::default());
             }
             KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Normal,
             _ => self.mode = Mode::OpenWithPicker { apps, selected },
@@ -1053,7 +1201,26 @@ impl App {
             self.cwd.file_name().map(|n| n.to_string_lossy().into_owned())
         }
         .unwrap_or_else(|| "archive".to_string());
-        self.mode = Mode::Prompt(PromptKind::Compress, format!("{base}.tar.gz"));
+        self.mode = Mode::Prompt(PromptKind::Compress, format!("{base}.tar.gz").into());
+    }
+
+    /// `X`: extract the focused archive into a folder named after it, via the
+    /// transfer daemon. Existing files are never overwritten.
+    fn begin_extract(&mut self) {
+        let Some(entry) = self.focused_entry() else { return };
+        if entry.is_dir || !is_archive_name(&entry.name) {
+            self.set_error("not a supported archive (.zip .tar .tar.gz .tgz .tar.xz .tar.zst .tar.bz2)".to_string());
+            return;
+        }
+        if !self.transfer.is_available() {
+            self.set_error("extract needs the transfer daemon (ftctl not found)".to_string());
+            return;
+        }
+        let archive = entry.path.clone();
+        let dest = self.cwd.join(extract_folder_name(&entry.name));
+        let name = entry.name.clone();
+        let client = self.transfer.clone();
+        self.spawn_enqueue(client, "extract", vec![archive], dest, format!("queued extract of '{name}'"), false);
     }
 
     /// `T`: browse the trash and restore items.
@@ -1199,7 +1366,7 @@ impl App {
                 self.filter_snapshot = self.filter.clone();
                 self.mode = Mode::Search;
             }
-            KeyCode::Char('g') => self.mode = Mode::GotoPath(String::new()),
+            KeyCode::Char('g') => self.mode = Mode::GotoPath(Input::default()),
             KeyCode::Char('e') => return self.open_editor(),
             KeyCode::Char('o') => self.open_xdg(),
             KeyCode::Char('R') | KeyCode::F(5) => self.refresh(),
@@ -1211,22 +1378,23 @@ impl App {
             KeyCode::Char('c') => self.copy_selection(),
             KeyCode::Char('x') => self.cut_selection(),
             KeyCode::Char('p') => self.paste_clipboard(),
-            KeyCode::Char('u') => self.mode = Mode::Prompt(PromptKind::SendRemote, String::new()),
+            KeyCode::Char('u') => self.mode = Mode::Prompt(PromptKind::SendRemote, Input::default()),
             KeyCode::Char('P') => self.show_clipboard(),
             KeyCode::Char('d') => self.trash_selection(),
             KeyCode::Char('D') => self.begin_delete_confirm(),
             KeyCode::Char('r') => {
                 let name = self.focused_entry().map(|e| e.name.clone());
                 if let Some(name) = name {
-                    self.mode = Mode::Prompt(PromptKind::Rename, name);
+                    self.mode = Mode::Prompt(PromptKind::Rename, name.into());
                 }
             }
-            KeyCode::Char('n') => self.mode = Mode::Prompt(PromptKind::Mkdir, String::new()),
-            KeyCode::Char('t') => self.mode = Mode::Prompt(PromptKind::Touch, String::new()),
-            KeyCode::Char('L') => self.mode = Mode::Prompt(PromptKind::SymlinkTarget, String::new()),
+            KeyCode::Char('n') => self.mode = Mode::Prompt(PromptKind::Mkdir, Input::default()),
+            KeyCode::Char('t') => self.mode = Mode::Prompt(PromptKind::Touch, Input::default()),
+            KeyCode::Char('L') => self.mode = Mode::Prompt(PromptKind::SymlinkTarget, Input::default()),
             KeyCode::Char('O') => self.open_with_menu(),
             KeyCode::Char('T') => self.open_trash(),
             KeyCode::Char('Z') => self.begin_compress(),
+            KeyCode::Char('X') => self.begin_extract(),
             KeyCode::Char('?') => self.mode = Mode::Help,
             KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
                 let idx = c.to_digit(10).unwrap() as usize - 1;
@@ -1266,45 +1434,35 @@ impl App {
         self.refresh_cursor_and_preview();
     }
 
-    fn handle_goto_key(&mut self, key: KeyEvent, mut buf: String) {
+    fn handle_goto_key(&mut self, key: KeyEvent, mut buf: Input) {
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
-            KeyCode::Enter => self.submit_goto(buf),
-            KeyCode::Backspace => {
-                buf.pop();
+            KeyCode::Enter => self.submit_goto(buf.text),
+            _ => {
+                buf.handle(&key);
                 self.mode = Mode::GotoPath(buf);
             }
-            KeyCode::Char(c) => {
-                buf.push(c);
-                self.mode = Mode::GotoPath(buf);
-            }
-            _ => self.mode = Mode::GotoPath(buf),
         }
     }
 
-    fn handle_prompt_key(&mut self, key: KeyEvent, kind: PromptKind, mut buf: String) {
+    fn handle_prompt_key(&mut self, key: KeyEvent, kind: PromptKind, mut buf: Input) {
         match key.code {
             KeyCode::Esc => {
                 self.pending_symlink_target = None;
                 self.mode = Mode::Normal;
             }
             KeyCode::Enter => {
-                if buf.trim().is_empty() {
+                if buf.text.trim().is_empty() {
                     self.set_error("input cannot be empty".to_string());
                     self.mode = Mode::Normal;
                 } else {
-                    self.submit_prompt(kind, buf);
+                    self.submit_prompt(kind, buf.text);
                 }
             }
-            KeyCode::Backspace => {
-                buf.pop();
+            _ => {
+                buf.handle(&key);
                 self.mode = Mode::Prompt(kind, buf);
             }
-            KeyCode::Char(c) => {
-                buf.push(c);
-                self.mode = Mode::Prompt(kind, buf);
-            }
-            _ => self.mode = Mode::Prompt(kind, buf),
         }
     }
 
@@ -1400,5 +1558,91 @@ fn expand_goto_path(input: &str, home: &Path, cwd: &Path) -> PathBuf {
         p
     } else {
         cwd.join(p)
+    }
+}
+
+/// "compressing"/"compressed" style verb for a daemon job mode.
+fn job_verb(mode: &str, past: bool) -> &'static str {
+    match (mode, past) {
+        ("compress", false) => "compressing",
+        ("compress", true) => "compressed",
+        ("extract", false) => "extracting",
+        ("extract", true) => "extracted",
+        ("move", false) => "moving",
+        ("move", true) => "moved",
+        (_, false) => "copying",
+        (_, true) => "copied",
+    }
+}
+
+/// Short human name for a job: the archive for compress/extract, otherwise
+/// the first source (plus a count of the rest).
+fn job_title(job: &Job) -> String {
+    let base = |p: &str| {
+        Path::new(p.trim_end_matches('/')).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.to_string())
+    };
+    match job.mode.as_str() {
+        "compress" => base(&job.dest),
+        "extract" => job.sources.first().map(|s| base(s)).unwrap_or_default(),
+        _ => {
+            let first = job.sources.first().map(|s| base(s)).unwrap_or_default();
+            match job.sources.len() {
+                0 | 1 => first,
+                n => format!("{first} +{} more", n - 1),
+            }
+        }
+    }
+}
+
+/// True for file names fim can extract through the daemon.
+fn is_archive_name(name: &str) -> bool {
+    let l = name.to_lowercase();
+    [".zip", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.zst", ".tar.bz2", ".tbz2"].iter().any(|s| l.ends_with(s))
+}
+
+/// Folder name to extract `archive` into: its name minus the archive extension.
+fn extract_folder_name(archive: &str) -> String {
+    let l = archive.to_lowercase();
+    for s in [".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2", ".tgz", ".txz", ".tbz2", ".zip", ".tar"] {
+        if l.ends_with(s) && archive.len() > s.len() {
+            return archive[..archive.len() - s.len()].to_string();
+        }
+    }
+    format!("{archive}.extracted")
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn edits_in_the_middle_with_arrows() {
+        let mut i = Input::from("abd".to_string());
+        i.handle(&key(KeyCode::Left));
+        i.handle(&key(KeyCode::Char('c')));
+        assert_eq!((i.text.as_str(), i.cursor), ("abcd", 3));
+        i.handle(&key(KeyCode::Home));
+        i.handle(&key(KeyCode::Delete));
+        assert_eq!(i.text, "bcd");
+        i.handle(&key(KeyCode::End));
+        i.handle(&key(KeyCode::Backspace));
+        assert_eq!((i.text.as_str(), i.cursor), ("bc", 2));
+    }
+
+    #[test]
+    fn multibyte_and_bounds() {
+        let mut i = Input::from("héé".to_string());
+        i.handle(&key(KeyCode::Left));
+        i.handle(&key(KeyCode::Backspace));
+        assert_eq!(i.text, "hé");
+        for _ in 0..5 { i.handle(&key(KeyCode::Left)); }
+        assert_eq!(i.cursor, 0);
+        i.handle(&key(KeyCode::Backspace));
+        for _ in 0..5 { i.handle(&key(KeyCode::Right)); }
+        assert_eq!(i.cursor, 2);
     }
 }

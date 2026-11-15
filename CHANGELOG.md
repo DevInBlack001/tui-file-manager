@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-11-15
+
+### Added
+
+- Extract with `X`: unpacks the focused archive (`.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.xz`, `.tar.zst`, `.tar.bz2`) into a folder named after it. Existing files are never overwritten.
+- Compress (`Z`) and extract now run in the transfer daemon, so their progress shows in the Transfer Manager and live in fim's status bar (for example `compressing docs.tar.gz 43%`). `Z` falls back to the old in-process compress when `ftctl` is missing.
+- Left, Right, Home, End and Delete move the cursor inside the rename, new name, goto and other text prompts.
+
+### Changed
+
+- Status messages disappear after 4 seconds. In-progress messages stay until the result replaces them.
+
+### Fixed
+
+- The preview's `transfer:` line always showed 0%. It now shows the real percentage.
+
 ## [0.4.2] - 2026-11-15
 
 ### Fixed

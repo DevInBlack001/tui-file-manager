@@ -100,8 +100,9 @@ Run `fim` from any directory. Press `?` at any time for the full keybinding refe
 | `d` | Trash |
 | `D` | Permanent delete (typed confirmation) |
 | `T` | Browse trash (`Space` mark, `Enter`/`r` restore) |
-| `Z` | Compress selection (`.tar.gz` default; `.zip`, `.tar`, `.tar.xz`, `.tar.zst` by extension) |
-| `r` | Rename |
+| `Z` | Compress selection (`.tar.gz` default; `.zip`, `.tar`, `.tar.xz`, `.tar.zst` by extension), with live progress via `ftctl` |
+| `X` | Extract the focused archive into a folder named after it (never overwrites), with live progress |
+| `r` | Rename (`Left`/`Right`/`Home`/`End`/`Delete` edit in place) |
 | `n` / `t` | New directory / new file |
 | `L` | New symlink |
 | `q`, `Ctrl+C` | Quit |

@@ -75,6 +75,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::
     loop {
         app.poll_preview();
         app.poll_background();
+        app.expire_status();
         app.maybe_poll_job_status();
         app.maybe_poll_mounts();
 

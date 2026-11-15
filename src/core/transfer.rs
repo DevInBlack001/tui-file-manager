@@ -51,6 +51,8 @@ pub struct Job {
     pub dest: String,
     /// Completion percentage (0-100), if reported by the daemon.
     pub pct: Option<u8>,
+    /// Failure message when `state` is "error", else empty.
+    pub error: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +77,24 @@ struct JobRecord {
     sources: Vec<String>,
     #[serde(default)]
     dest: String,
-    pct: Option<u8>,
+    #[serde(default)]
+    error: String,
+    #[serde(rename = "bytesDone", default)]
+    bytes_done: i64,
+    #[serde(rename = "bytesTotal", default)]
+    bytes_total: i64,
+}
+
+impl JobRecord {
+    /// Completion percentage from the daemon's byte counters; None until the
+    /// total is known.
+    fn pct(&self) -> Option<u8> {
+        if self.bytes_total <= 0 {
+            return None;
+        }
+        let p = (self.bytes_done.max(0) as f64 / self.bytes_total as f64 * 100.0).round();
+        Some(p.clamp(0.0, 100.0) as u8)
+    }
 }
 
 #[derive(Deserialize)]
@@ -125,8 +144,9 @@ impl TransferClient {
 
     /// Ask ftctl to enqueue a copy or move job.
     ///
-    /// `mode` must be "copy" or "move". The flag passed to ftctl is
-    /// `--copy` or `--move` accordingly.
+    /// `mode` is "copy", "move", "compress" or "extract". For compress, `dest`
+    /// is the new archive path; for extract, `sources` is the single archive and
+    /// `dest` the target folder.
     ///
     /// Returns the job ID string on success.
     ///
@@ -153,9 +173,14 @@ impl TransferClient {
         // Validate symlink sources before touching the subprocess.
         validate_sources(sources)?;
 
-        let mode_flag = if mode == "move" { "--move" } else { "--copy" };
+        let mode_flag = match mode {
+            "move" => "--move",
+            "compress" => "--compress",
+            "extract" => "--extract",
+            _ => "--copy",
+        };
 
-        // Build argv: ftctl enqueue --copy|--move <dest> -- <sources...>
+        // Build argv: ftctl enqueue --copy|--move|--compress|--extract <dest> -- <sources...>
         let mut cmd = std::process::Command::new(ftctl);
         cmd.arg("enqueue")
             .arg(mode_flag)
@@ -200,12 +225,13 @@ impl TransferClient {
                 .jobs
                 .into_iter()
                 .map(|r| Job {
+                    pct: r.pct(),
+                    error: r.error,
                     id: r.id,
                     mode: r.mode,
                     state: r.state,
                     sources: r.sources,
                     dest: r.dest,
-                    pct: r.pct,
                 })
                 .collect(),
         )

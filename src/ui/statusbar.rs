@@ -10,7 +10,7 @@ use ratatui::Frame;
 use crate::app::App;
 use crate::ui::prompt;
 
-const HINTS: &str = "[c]opy [x]cut [p]aste [d]trash [T]rash bin [Z]ip [D]elete [r]ename [n]ewdir [t]ouch [/]search [g]oto [?]help [q]uit";
+const HINTS: &str = "[c]opy [x]cut [p]aste [d]trash [T]rash bin [Z]ip e[X]tract [D]elete [r]ename [n]ewdir [t]ouch [/]search [g]oto [?]help [q]uit";
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
@@ -20,6 +20,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     } else if let Some(status) = &app.status {
         let color = if status.is_error { theme.red } else { theme.green };
         Line::from(Span::styled(status.text.clone(), Style::default().fg(color)))
+    } else if let Some(summary) = &app.job_summary {
+        Line::from(Span::styled(summary.clone(), Style::default().fg(theme.accent)))
     } else {
         Line::from(Span::styled(HINTS, Style::default().fg(theme.muted)))
     };
