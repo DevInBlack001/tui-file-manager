@@ -24,7 +24,7 @@ optdepends=(
 provides=('fim')
 conflicts=('fim')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/DevInBlack001/tui-file-manager/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('b86e7c1b70bf45d201eb36759e7262eaeeea438a8bd8277535660ade1442c0e2')
+sha256sums=('6cf532d4b681cf62859bddb37810fedf9cc78030c07170131f331ea147ef5813')
 
 prepare() {
     cd "$pkgname-$pkgver"
